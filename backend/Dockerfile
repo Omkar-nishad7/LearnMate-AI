@@ -16,6 +16,9 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 COPY . .
 RUN chmod +x /app/entrypoint.sh
 
+# CA certificate from backend/certs/aiven-ca.pem in the build context.
+ENV DB_SSL_CA=/app/certs/aiven-ca.pem
+
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

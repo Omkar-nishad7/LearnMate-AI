@@ -1,7 +1,10 @@
 #!/bin/sh
 set -eu
 
-echo "Waiting for database and applying migrations..."
+echo "Checking database connections before applying migrations..."
+python -m app.db.check_connections
+
+echo "Database connections verified. Applying migrations..."
 alembic upgrade head
 
 echo "Starting LearnMate AI API..."
