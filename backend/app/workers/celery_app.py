@@ -1,11 +1,21 @@
+
 from celery import Celery
 
 from app.config.settings import settings
 
+redis_url = settings.REDIS_URL
+
+# Configure TLS certificate verification for Celery's Redis connections.
+if redis_url.startswith("rediss://"):
+    separator = "&" if "?" in redis_url else "?"
+    celery_redis_url = f"{redis_url}{separator}ssl_cert_reqs=required"
+else:
+    celery_redis_url = redis_url
+
 celery_app = Celery(
     "learnmate",
-    broker=settings.REDIS_URL,
-    backend=settings.REDIS_URL,
+    broker=celery_redis_url,
+    backend=celery_redis_url,
     include=[
         "app.workers.tasks.video_tasks",
         "app.workers.tasks.ai_tasks",
