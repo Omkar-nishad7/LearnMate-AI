@@ -43,7 +43,9 @@ AsyncSessionLocal = async_sessionmaker(
 _sync_kwargs = {"echo": settings.DEBUG, "pool_pre_ping": True}
 if _tls is not None:
     _sync_kwargs["connect_args"] = {
-        "ssl": _tls[1], "ssl_verify_cert": True, "ssl_verify_identity": True
+        "ssl_ca": str(_CA_PATH),
+        "ssl_verify_cert": True,
+        "ssl_verify_identity": True,
     }
 sync_engine = create_engine(settings.DATABASE_SYNC_URL, **_sync_kwargs)
 SyncSessionLocal = sessionmaker(bind=sync_engine, autoflush=False)

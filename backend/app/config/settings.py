@@ -67,12 +67,18 @@ class Settings(BaseSettings):
     SENTRY_DSN: str = ""
     LOG_LEVEL: str = "INFO"
 
+    
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def split_cors(cls, v):
         if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("["):
+                import json
+                return json.loads(v)
             return [o.strip() for o in v.split(",") if o.strip()]
         return v
+
 
 
 @lru_cache
