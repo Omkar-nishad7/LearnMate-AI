@@ -1,0 +1,10 @@
+[Unit]
+Description=Renew LearnMate-AI TLS certificates and reload Nginx
+Wants=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/learnmate
+ExecStart=/bin/bash /opt/learnmate/scripts/renew_certificates.sh
+User=root

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run LearnMate-AI certificate renewal twice daily
+
+[Timer]
+OnCalendar=*-*-* 03,15:17:00
+RandomizedDelaySec=15m
+Persistent=true
+Unit=learnmate-cert-renew.service
+
+[Install]
+WantedBy=timers.target

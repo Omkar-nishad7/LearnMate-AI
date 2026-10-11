@@ -1,0 +1,54 @@
+# ---------- Core ----------
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+pydantic-settings==2.5.2
+
+# ---------- Database ----------
+SQLAlchemy==2.0.35
+alembic==1.13.3
+asyncmy==0.2.10
+pymysql==1.1.1
+aiosqlite==0.20.0
+
+# ---------- Auth ----------
+python-jose[cryptography]==3.3.0
+passlib[argon2]==1.7.4
+argon2-cffi==23.1.0
+python-multipart==0.0.12
+
+# ---------- Background ----------
+celery[redis]==5.4.0
+redis==5.0.8
+
+# ---------- AI ----------
+google-genai>=1.75.0,<2.0.0
+tenacity==9.0.0
+
+# ---------- Video ----------
+yt-dlp==2026.8.19
+youtube-transcript-api==1.2.4
+
+# ---------- Storage / PDF ----------
+boto3==1.35.36
+aiofiles==23.2.1
+reportlab==4.2.5
+
+# ---------- Templates ----------
+jinja2==3.1.4
+
+# ---------- Observability ----------
+structlog==24.4.0
+sentry-sdk[fastapi]==2.15.0
+
+# ---------- Utils ----------
+python-dotenv==1.0.1
+email-validator==2.2.0
+
+# ---------- Testing ----------
+pytest==8.3.3
+pytest-asyncio==0.24.0
+httpx==0.28.1
+
+# ---------- Lint (CI) ----------
+ruff==0.6.9

@@ -1,0 +1,98 @@
+/* Tailwind directives are processed by PostCSS. */
+/* stylelint-disable at-rule-no-unknown */
+/* css-languageservice-disable unknownAtRules */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+/* stylelint-enable at-rule-no-unknown */
+
+:root {
+  --background: 248 250 252;
+  --foreground: 15 23 42;
+  --card: 255 255 255;
+  --border: 226 232 240;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: rgb(var(--background));
+  color: rgb(var(--foreground));
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: rgba(37, 99, 235, 0.18);
+}
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900;
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .card-ui {
+    @apply rounded-2xl border border-slate-200 bg-white shadow-card;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50;
+  }
+
+  .input-ui {
+    @apply w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100;
+  }
+
+  .sidebar-link {
+    @apply flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900;
+  }
+
+  .sidebar-link-active {
+    @apply bg-blue-50 text-blue-700;
+  }
+
+  .learnmate-mobile-content {
+    @apply pb-24 lg:pb-0;
+  }
+}
+/* Responsive dashboard navigation */
+@media (max-width: 1023px) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+}
+
+@media (min-width: 1024px) {
+  .learnmate-mobile-nav {
+    display: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  /* Keep page content clear of the fixed mobile quick-navigation bar. */
+  body:has(aside[aria-label$="navigation"]) main {
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* Keep dashboard content below the fixed LearnMate navbar. */
+@layer components {
+  header[data-learnmate-navbar="true"] + main {
+    padding-top: 5.5rem !important;
+  }
+}

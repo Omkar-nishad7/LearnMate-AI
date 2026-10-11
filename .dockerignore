@@ -1,0 +1,6 @@
+# Minimal context for docker/backup.Dockerfile; do not send app source or secrets.
+**
+!scripts/
+!scripts/backup_db.sh
+!scripts/restore_db.sh
+!scripts/backup-entrypoint.sh

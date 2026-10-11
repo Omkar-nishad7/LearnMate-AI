@@ -1,0 +1,117 @@
+
+---
+
+## 5. Files Modified
+
+None (initial milestone).
+
+---
+
+## 6. Database Changes
+
+- **27 tables created** via Alembic migration `0001_initial_schema`
+- All FKs, unique constraints, and indexes defined
+- `created_at`/`updated_at` on every table
+- Enum types matching the spec (roles, statuses)
+
+---
+
+## 7. API Endpoints (This Milestone)
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/` | Root info |
+| GET | `/api/v1/health` | Liveness |
+| GET | `/api/v1/health/db` | DB readiness |
+| GET | `/api/v1/health/redis` | Redis readiness |
+| GET | `/docs` | OpenAPI UI |
+| GET | `/openapi.json` | OpenAPI spec |
+
+---
+
+## 8. Tests
+
+- `tests/unit/test_health.py` — root + health endpoint tests
+- `tests/conftest.py` — async HTTP client fixture
+
+Run: `pytest -v`
+
+---
+
+## 9. Environment Variables
+
+See `.env.example`. Minimum required:
+- `SECRET_KEY`, `JWT_SECRET_KEY`
+- `DATABASE_URL`, `DATABASE_SYNC_URL`
+- `REDIS_URL`
+
+---
+
+## 10. How To Run
+
+```bash
+# 1. Configure
+cp .env.example .env
+
+# 2. Start stack
+docker compose up -d --build
+
+# 3. Migrate
+docker compose exec backend alembic upgrade head
+
+# 4. Verify
+curl http://localhost:8000/api/v1/health
+curl http://localhost:8000/api/v1/health/db
+curl http://localhost:8000/api/v1/health/redis
+
+
+
+### 4.32 CI env note
+
+The `tests.yml` workflow uses **SQLite for tests** (the conftest override). MySQL/Redis services are declared so integration tests that want them can use them — the current suite doesn't require them.
+
+---
+
+## 5. Files Modified
+
+| File | Change |
+|---|---|
+| `backend/app/main.py` | Sentry init, Gzip, `/health/live` + `/health/ready`, hide docs in prod, mount static |
+| `backend/app/web/views.py` | Inject `env` + `sentry_dsn` into all template contexts |
+| `backend/app/api/v1/__init__.py` | Register `notes`, `users` |
+| `backend/app/api/v1/courses.py` | Add `GET /teacher/courses/{id}/students` |
+| `backend/app/schemas/__init__.py` | Export note schemas |
+| `frontend/templates/base.html` | Load `monitoring.js` + env/DSN globals |
+| `docker-compose.yml` | + nginx + certbot + backups volume |
+| `README.md` | Final rewrite |
+
+---
+
+## 6. Database Changes
+
+**None.** All follow-up endpoints use M1 tables.
+
+---
+
+## 7. API Endpoints (new in M10)
+
+| Method | Path | Auth |
+|---|---|---|
+| POST | `/api/v1/notes` | user |
+| GET | `/api/v1/notes` | user (own only) |
+| GET | `/api/v1/notes/{id}` | owner |
+| PATCH | `/api/v1/notes/{id}` | owner |
+| DELETE | `/api/v1/notes/{id}` | owner |
+| GET | `/api/v1/notes/{id}/versions` | owner |
+| PATCH | `/api/v1/users/me` | user |
+| GET | `/api/v1/teacher/courses/{id}/students` | owning teacher |
+| GET | `/health/live` | public |
+| GET | `/health/ready` | public |
+
+---
+
+## 8. Tests
+
+**Backend:**
+```bash
+make test

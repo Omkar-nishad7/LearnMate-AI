@@ -1,0 +1,149 @@
+name: deploy
+
+on:
+  workflow_run:
+    workflows: [tests]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: learnmate-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Opt-in after staging validation; also protect this with required reviewers on the
+    # GitHub `production` environment. An unset variable safely prevents deployment.
+    if: >-
+      vars.ENABLE_PRODUCTION_DEPLOY == 'true' &&
+      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository))
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Set deployment revision
+        id: revision
+        env:
+          EVENT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$EVENT_SHA" =~ ^[0-9a-f]{40,64}$ ]] || { echo "Expected a full tested commit SHA" >&2; exit 1; }
+          echo "sha=$EVENT_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Set up SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_PRIVATE_KEY" || { echo "SSH_PRIVATE_KEY secret is missing" >&2; exit 1; }
+          test -n "$SSH_HOST" || { echo "SSH_HOST secret is missing" >&2; exit 1; }
+          test -n "$SSH_KNOWN_HOSTS" || { echo "SSH_KNOWN_HOSTS secret is missing; pin the server host key" >&2; exit 1; }
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy tested revision and verify production
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_SHA: ${{ steps.revision.outputs.sha }}
+          DEPLOY_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test -n "$SSH_USER" || { echo "SSH_USER secret is missing" >&2; exit 1; }
+          test -n "$DEPLOY_REPOSITORY" || { echo "GitHub repository slug is unavailable" >&2; exit 1; }
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "DEPLOY_SHA='$DEPLOY_SHA' DEPLOY_REPOSITORY='$DEPLOY_REPOSITORY' bash -s" <<'REMOTE'
+          set -Eeuo pipefail
+          cd /opt/learnmate
+          [[ "${DEPLOY_REPOSITORY:-}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo 'Invalid expected GitHub repository slug' >&2; exit 1; }
+          [[ "${DEPLOY_SHA:-}" =~ ^[0-9a-f]{40,64}$ ]] || { echo 'Invalid tested commit SHA' >&2; exit 1; }
+          CURRENT_ORIGIN="$(git remote get-url origin 2>/dev/null)" || { echo 'No Git origin configured in /opt/learnmate' >&2; exit 1; }
+          normalize_github_remote() {
+            local remote="$1" normalized
+            case "$remote" in
+              https://github.com/*) normalized="${remote#https://github.com/}" ;;
+              git@github.com:*) normalized="${remote#git@github.com:}" ;;
+              ssh://git@github.com/*) normalized="${remote#ssh://git@github.com/}" ;;
+              *) return 1 ;;
+            esac
+            normalized="${normalized%.git}"
+            printf '%s' "$normalized"
+          }
+          ACTUAL_REPOSITORY="$(normalize_github_remote "$CURRENT_ORIGIN")" || { echo 'origin must be a direct HTTPS or SSH GitHub URL without embedded credentials' >&2; exit 1; }
+          [[ "$ACTUAL_REPOSITORY" == "$DEPLOY_REPOSITORY" ]] || {
+            echo "Git origin mismatch: this workflow belongs to '$DEPLOY_REPOSITORY', but /opt/learnmate points to '$ACTUAL_REPOSITORY'. Update/clone the new repository before deploying." >&2
+            exit 1
+          }
+          test -f .env || { echo 'Missing /opt/learnmate/.env' >&2; exit 1; }
+          chmod 600 .env
+          grep -q '^SERVER_NAME=' .env || { echo 'SERVER_NAME missing from .env' >&2; exit 1; }
+          DOMAIN="$(sed -n 's/^SERVER_NAME=//p' .env | tail -n1 | tr -d '\"' | tr -d "'")"
+          [[ -n "$DOMAIN" && "$DOMAIN" != CHANGE_ME_DOMAIN && "$DOMAIN" != localhost ]] || { echo 'SERVER_NAME must be the real production domain' >&2; exit 1; }
+          [[ "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]] || { echo 'SERVER_NAME must be a plain DNS hostname' >&2; exit 1; }
+          test -s "nginx/conf.d/learnmate.https.conf" || { echo 'HTTPS is not bootstrapped. Run scripts/enable_https.sh manually before enabling CI deployment.' >&2; exit 1; }
+          ! grep -q 'YOUR_DOMAIN' nginx/conf.d/learnmate.https.conf || { echo 'HTTPS config still contains template placeholders' >&2; exit 1; }
+          test -s "certbot/conf/live/${DOMAIN}/fullchain.pem" || { echo 'TLS certificate missing for SERVER_NAME' >&2; exit 1; }
+          test -s "certbot/conf/live/${DOMAIN}/privkey.pem" || { echo 'TLS private key missing for SERVER_NAME' >&2; exit 1; }
+
+          PREVIOUS_SHA="$(git rev-parse HEAD)"
+          git fetch origin "$DEPLOY_SHA"
+          git cat-file -e "${DEPLOY_SHA}^{commit}"
+          printf '%s\n' "$PREVIOUS_SHA" > .previous-release
+          chmod 600 .previous-release
+          git reset --hard "$DEPLOY_SHA"
+          bash scripts/validate_deploy_env.sh production
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
+          test -s "nginx/conf.d/learnmate.https.conf" || { echo 'HTTPS config missing at the tested revision' >&2; exit 1; }
+          test -s "certbot/conf/live/${DOMAIN}/fullchain.pem" || { echo 'TLS certificate missing after checkout' >&2; exit 1; }
+          test -s "certbot/conf/live/${DOMAIN}/privkey.pem" || { echo 'TLS private key missing after checkout' >&2; exit 1; }
+
+          # Build all images, including the backup container, before changing the DB.
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml build
+          # Start stateful services first; the first deployment has no running database yet.
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d mysql redis
+          for i in $(seq 1 60); do
+            if [[ "$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' learnmate_mysql 2>/dev/null || true)" == healthy \
+              && "$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' learnmate_redis 2>/dev/null || true)" == healthy ]]; then
+              break
+            fi
+            if [[ "$i" == 60 ]]; then
+              echo 'MySQL/Redis did not become healthy before backup/migration.' >&2
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=200 mysql redis >&2 || true
+              exit 1
+            fi
+            sleep 5
+          done
+          # A successful pre-migration dump is mandatory. It is stored in the backups volume.
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm --no-deps backup /usr/local/bin/backup_db.sh
+          # Run migrations once as a one-off task before starting the new API container.
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm --no-deps --entrypoint alembic backend upgrade head
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
+
+          # Require healthy DB, Redis, worker, API, frontend, and Nginx before public checks.
+          for i in $(seq 1 60); do
+            if [[ "$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' learnmate_mysql 2>/dev/null || true)" == healthy \
+              && "$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' learnmate_redis 2>/dev/null || true)" == healthy \
+              && "$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' learnmate_worker 2>/dev/null || true)" == healthy \
+              && "$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' learnmate_backend 2>/dev/null || true)" == healthy \
+              && "$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' learnmate_frontend 2>/dev/null || true)" == healthy \
+              && "$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}' learnmate_nginx 2>/dev/null || true)" == healthy ]] \
+              && curl -fsS --max-time 5 "https://${DOMAIN}/health" >/dev/null \
+              && curl -fsS --max-time 10 "https://${DOMAIN}/" >/dev/null; then
+              echo "Deployment healthy: ${DEPLOY_SHA}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo 'Deployment health check failed. Containers/logs were left in place for diagnosis; inspect logs before any rollback because migrations may have changed the schema.' >&2
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml ps >&2 || true
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=200 mysql redis worker backend frontend nginx >&2 || true
+          exit 1
+          REMOTE

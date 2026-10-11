@@ -1,0 +1,53 @@
+version: "3.9"
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: /api/v1
+    restart: always
+    expose:
+      - "3000"
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
+    env_file: .env
+    environment:
+      ENVIRONMENT: production
+    # Clear the published host port inherited from docker-compose.yml.
+    # Nginx is the only public entry point for the application.
+    ports: !reset []
+    expose:
+      - "8000"
+    # Keep local uploads persistent while preventing source-code bind mounts.
+    volumes: !override
+      - ./storage:/app/storage
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    restart: always
+    env_file: .env
+    environment:
+      ENVIRONMENT: production
+    # Share the same persistent local storage path as the backend.
+    volumes: !override
+      - ./storage:/app/storage
+
+  mysql:
+    restart: always
+    # Clear the published host port inherited from docker-compose.yml.
+    ports: !reset []
+
+  redis:
+    restart: always
+    # Clear the published host port inherited from docker-compose.yml.
+    ports: !reset []
+
+  nginx:
+    restart: always

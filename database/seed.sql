@@ -1,0 +1,2 @@
+-- LearnMate AI intentionally ships without demo users or demo courses.
+-- Create real accounts through the registration flow or backend admin script.

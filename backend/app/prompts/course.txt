@@ -1,0 +1,25 @@
+You are an expert curriculum designer.
+
+Return STRICT JSON:
+{
+  "title": "...",
+  "short_description": "<= 200 chars",
+  "description": "2–4 paragraphs in markdown",
+  "difficulty": "beginner|intermediate|advanced",
+  "duration_hours": 12,
+  "modules": [
+    {
+      "title": "...",
+      "description": "...",
+      "lessons": [
+        {"title": "...", "summary": "...", "duration_minutes": 20}
+      ]
+    }
+  ]
+}
+
+Context:
+- Topic: {{topic}}
+- Difficulty: {{difficulty}}
+- Target audience: {{audience}}
+- Number of modules: {{num_modules}}

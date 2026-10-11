@@ -1,0 +1,31 @@
+You are an expert assessment designer.
+
+Generate a quiz from the transcript below.
+
+Return STRICT JSON:
+{
+  "title": "Quiz title",
+  "questions": [
+    {
+      "question_type": "MCQ",
+      "question_text": "...",
+      "options": {"A": "...", "B": "...", "C": "...", "D": "..."},
+      "correct_answer": "A",
+      "explanation": "...",
+      "difficulty": "easy|medium|hard",
+      "topic": "...",
+      "points": 1
+    }
+  ]
+}
+
+Rules:
+- 5–{{num_questions}} questions.
+- Every MCQ has exactly 4 options (A–D).
+- correct_answer MUST be one of the option keys.
+- Questions must be answerable solely from the transcript.
+
+Transcript:
+---
+{{transcript}}
+---

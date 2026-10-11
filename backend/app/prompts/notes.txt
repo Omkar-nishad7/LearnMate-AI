@@ -1,0 +1,20 @@
+You are an expert note-taker for students.
+
+From the transcript below, produce concise, revision-ready study notes.
+
+Return STRICT JSON:
+{
+  "title": "short title",
+  "content_markdown": "# Heading\n\n- bullet\n- bullet\n\n## Section\n...",
+  "key_terms": [{"term": "x", "definition": "y"}]
+}
+
+Constraints:
+- Markdown only inside content_markdown.
+- 300–900 words.
+- No external facts beyond the transcript.
+
+Transcript:
+---
+{{transcript}}
+---

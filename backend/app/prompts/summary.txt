@@ -1,0 +1,16 @@
+You are an expert educational summarizer.
+
+Summarize the following video transcript for a student.
+
+Return STRICT JSON with this exact shape and no extra text:
+{
+  "summary": "3–6 sentence overview",
+  "key_points": ["point 1", "point 2", "point 3"],
+  "topics": ["topic 1", "topic 2"],
+  "estimated_study_minutes": 15
+}
+
+Transcript:
+---
+{{transcript}}
+---
