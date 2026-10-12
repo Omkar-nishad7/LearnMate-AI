@@ -1,6 +1,8 @@
 import asyncio
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import html
 import json
+import os
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -392,6 +394,76 @@ def _fetch_transcript_ytdlp(video_id: str, languages: list[str]) -> TranscriptRe
     raise ValidationError("The video has no accessible transcript")
 
 
+def _fetch_transcript_supadata(video_id: str, languages: list[str]) -> TranscriptResult:
+    """Fetch public YouTube captions through a hosted provider when configured.
+
+    Cloud hosts are often blocked by YouTube directly. Supadata is an optional
+    provider so deployments can retrieve captions without YouTube session cookies.
+    """
+    api_key = os.getenv("SUPADATA_API_KEY", "").strip()
+    if not api_key:
+        raise ValidationError("SUPADATA_API_KEY is not configured")
+
+    params = {"url": f"https://www.youtube.com/watch?v={video_id}"}
+    preferred_language = next(
+        (lang for lang in languages if re.fullmatch(r"[a-zA-Z]{2}", lang)),
+        None,
+    )
+    if preferred_language:
+        params["lang"] = preferred_language
+
+    try:
+        with httpx.Client(
+            timeout=httpx.Timeout(45.0, connect=8.0),
+            follow_redirects=True,
+        ) as client:
+            response = client.get(
+                "https://api.supadata.ai/v1/transcript",
+                params=params,
+                headers={"x-api-key": api_key},
+            )
+            response.raise_for_status()
+            payload = response.json()
+    except httpx.HTTPStatusError as exc:
+        # Do not include request headers or the secret key in logs/errors.
+        raise ValidationError(
+            f"Supadata transcript request failed with HTTP {exc.response.status_code}"
+        ) from exc
+    except (httpx.HTTPError, ValueError) as exc:
+        raise ValidationError(f"Supadata transcript request failed: {type(exc).__name__}") from exc
+
+    content = payload.get("content")
+    segments: list[dict] = []
+    if isinstance(content, str):
+        full = _clean_caption_text(content)
+        if full:
+            segments.append({"start": 0.0, "duration": 0.0, "text": full})
+    elif isinstance(content, list):
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            clean = _clean_caption_text(item.get("text") or "")
+            if not clean:
+                continue
+            try:
+                start = float(item.get("offset") or 0) / 1000.0
+                duration = float(item.get("duration") or 0) / 1000.0
+            except (TypeError, ValueError):
+                start, duration = 0.0, 0.0
+            segments.append({"start": start, "duration": duration, "text": clean})
+
+    full = " ".join(item["text"] for item in segments).strip()
+    if not full:
+        message = payload.get("message") or payload.get("error") or "empty transcript response"
+        raise ValidationError(f"Supadata did not return transcript text: {message}")
+
+    return TranscriptResult(
+        text=full,
+        language=str(payload.get("lang") or preferred_language or "auto"),
+        segments=segments,
+    )
+
+
 def _fetch_transcript_api(video_id: str, languages: list[str]) -> TranscriptResult:
     api = YouTubeTranscriptApi()
     transcript_list = api.list(video_id)
@@ -443,37 +515,66 @@ def _fetch_transcript_api(video_id: str, languages: list[str]) -> TranscriptResu
 
 
 def fetch_transcript(video_id: str, languages: Optional[list[str]] = None) -> TranscriptResult:
-    """Fetch a real YouTube caption track, preferring the transcript API.
+    """Fetch a real transcript, using a hosted provider when configured.
 
-    The transcript API is tried first because yt-dlp is frequently blocked by
-    YouTube bot checks on hosted servers. yt-dlp remains a fallback only when
-    the transcript API cannot provide captions. No transcript is fabricated.
+    YouTube frequently blocks direct caption requests from cloud-hosting IPs.
+    If SUPADATA_API_KEY is configured, try that provider first; otherwise, or
+    if it fails, retain the existing direct YouTube providers as fallbacks.
+    Transcript text is never fabricated by this function.
     """
     langs = languages or ["en", "en-US", "en-GB", "hi"]
     errors: list[str] = []
 
-    try:
+    if os.getenv("SUPADATA_API_KEY", "").strip():
+        try:
+            result = _fetch_transcript_supadata(video_id, langs)
+            logger.info(
+                "youtube_transcript_provider_ready",
+                video_id=video_id,
+                provider="supadata",
+                language=result.language,
+                characters=len(result.text),
+            )
+            return result
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"Supadata: {exc}")
+            logger.warning(
+                "youtube_supadata_transcript_failed",
+                video_id=video_id,
+                error=str(exc),
+            )
+
+    def api_fetch():
         return _fetch_transcript_api(video_id, langs)
-    except Exception as exc:  # noqa: BLE001
-        errors.append(f"transcript API: {exc}")
-        logger.warning(
-            "youtube_transcript_api_failed",
-            video_id=video_id,
-            error=str(exc),
-        )
 
-    try:
+    def ytdlp_fetch():
         return _fetch_transcript_ytdlp(video_id, langs)
-    except Exception as exc:  # noqa: BLE001
-        errors.append(f"yt-dlp: {exc}")
-        logger.warning(
-            "youtube_transcript_ytdlp_failed",
-            video_id=video_id,
-            error=str(exc),
-        )
 
-    raise ValidationError(
-        "Unable to fetch YouTube captions. YouTube may be blocking transcript access "
-        "from the deployed server, or the video may not expose a public caption track. "
-        "The video remains playable; transcript-based AI tools require accessible captions."
-    )
+    executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="yt-transcript")
+    futures = [executor.submit(api_fetch), executor.submit(ytdlp_fetch)]
+    try:
+        for future in as_completed(futures):
+            try:
+                result = future.result()
+                # Do not wait for the slower fallback once a valid transcript
+                # has been returned. Its worker thread may finish in the
+                # background, but it no longer blocks the import task.
+                executor.shutdown(wait=False, cancel_futures=True)
+                return result
+            except Exception as exc:  # noqa: BLE001
+                errors.append(str(exc))
+
+        deployment_hint = (
+            " YouTube may be blocking this cloud server's IP. Configure SUPADATA_API_KEY "
+            "in the deployed backend and worker environment to use the hosted transcript provider."
+            if not os.getenv("SUPADATA_API_KEY", "").strip()
+            else " Check the youtube_transcript_task_failed worker log for the provider error."
+        )
+        detail = "; ".join(errors[-3:])
+        raise ValidationError(
+            "Unable to fetch YouTube captions. The video remains playable, but transcript-based tools "
+            "require an accessible caption track." + deployment_hint + (f" Provider errors: {detail}" if detail else "")
+        )
+    finally:
+        if any(not future.done() for future in futures):
+            executor.shutdown(wait=False, cancel_futures=True)
