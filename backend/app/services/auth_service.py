@@ -3,7 +3,7 @@ from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload
 
 from app.config.logging import get_logger
 from app.core.exceptions import (
@@ -111,7 +111,7 @@ class AuthService:
         # from failing with MissingGreenlet/response-validation errors.
         result = await self.db.execute(
             select(User)
-            .options(selectinload(User.profile))
+            .options(joinedload(User.profile))
             .where(User.id == user.id)
         )
         user = result.scalar_one()

@@ -26,7 +26,6 @@ export default function LoginPage() {
       const result = await loginUser(form);
       toast.success("Login successful");
       router.replace(dashboardForRole(result?.user?.role));
-      router.refresh();
     } catch (error) {
       toast.error(
         error?.message || "Login failed. Please check your email and password.",

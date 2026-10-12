@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload
 
 from app.models.user import User, UserProfile, UserRole, UserStatus
 
@@ -14,7 +14,7 @@ class UserRepository:
     async def get_by_id(self, user_id: int) -> Optional[User]:
         stmt = (
             select(User)
-            .options(selectinload(User.profile))
+            .options(joinedload(User.profile))
             .where(User.id == user_id, User.deleted_at.is_(None))
         )
         res = await self.db.execute(stmt)
@@ -23,7 +23,7 @@ class UserRepository:
     async def get_by_email(self, email: str) -> Optional[User]:
         stmt = (
             select(User)
-            .options(selectinload(User.profile))
+            .options(joinedload(User.profile))
             .where(User.email == email.lower(), User.deleted_at.is_(None))
         )
         res = await self.db.execute(stmt)
