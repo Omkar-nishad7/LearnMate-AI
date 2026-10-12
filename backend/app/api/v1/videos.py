@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File as FastFile, Form, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File as FastFile, Form, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import settings
@@ -21,7 +21,7 @@ from app.schemas.video import (
     VideoUpdate,
 )
 from app.services.video_service import VideoService
-from app.workers.tasks.video_tasks import fetch_video_transcript, process_video
+from app.workers.tasks.video_tasks import fetch_video_transcript_inline, process_video
 
 router = APIRouter(prefix="/videos", tags=["videos"])
 
@@ -83,6 +83,7 @@ async def create_video(
     payload: VideoCreateFromYouTube,
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
 ):
     svc = VideoService(db)
     video, should_process = await svc.create_from_youtube(
@@ -90,7 +91,7 @@ async def create_video(
     )
     task_id = process_video.delay(video.id).id if should_process else ""
     if should_process and video.source.value == "YOUTUBE":
-        fetch_video_transcript.delay(video.id)
+        background_tasks.add_task(fetch_video_transcript_inline, video.id)
     return VideoCreateResponse(video=VideoOut.model_validate(video), task_id=task_id)
 
 
@@ -103,6 +104,7 @@ async def create_video(
 async def upload_video(
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
     file: UploadFile = FastFile(...),
     lesson_id: int | None = Form(default=None),
 ):
@@ -121,7 +123,7 @@ async def upload_video(
     )
     task = process_video.delay(video.id)
     if video.source.value == "YOUTUBE":
-        fetch_video_transcript.delay(video.id)
+        background_tasks.add_task(fetch_video_transcript_inline, video.id)
     return VideoCreateResponse(video=VideoOut.model_validate(video), task_id=task.id)
 
 
@@ -229,11 +231,12 @@ async def retry_video_transcript(
     video_id: int,
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
 ):
     video = await VideoService(db).get_for_viewer(user, video_id)
     if video.source.value != "YOUTUBE":
         raise ValidationError("Transcript retry is available for YouTube videos only")
-    fetch_video_transcript.delay(video.id)
+    background_tasks.add_task(fetch_video_transcript_inline, video.id)
     return VideoOut.model_validate(video)
 
 
@@ -242,10 +245,11 @@ async def reprocess_video(
     video_id: int,
     user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
+    background_tasks: BackgroundTasks,
 ):
     svc = VideoService(db)
     video = await svc.get_for_viewer(user, video_id)
     task = process_video.delay(video.id)
     if video.source.value == "YOUTUBE":
-        fetch_video_transcript.delay(video.id)
+        background_tasks.add_task(fetch_video_transcript_inline, video.id)
     return VideoCreateResponse(video=VideoOut.model_validate(video), task_id=task.id)

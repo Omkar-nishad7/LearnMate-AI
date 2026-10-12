@@ -245,6 +245,51 @@ async def _process_video_async(video_id: int) -> dict:
             raise
 
 
+async def _fetch_video_transcript_async(video_id: int) -> dict:
+    """Fetch and persist a transcript using the current async application loop."""
+    async with AsyncSessionLocal() as db:
+        svc = VideoService(db)
+        video = await svc.videos.get_by_id(video_id)
+        if not video or video.source.value != "YOUTUBE":
+            return {"ok": False, "reason": "not_youtube", "video_id": video_id}
+
+        external_id = video.external_id or extract_video_id(video.url)
+        try:
+            transcript = await asyncio.to_thread(fetch_transcript, external_id)
+            await svc.videos.update_analysis_content(
+                video_id,
+                transcript=transcript.text,
+                language=transcript.language or "auto",
+                model_used="youtube-transcript",
+            )
+            await db.commit()
+            logger.info(
+                "youtube_transcript_ready",
+                video_id=video_id,
+                language=transcript.language,
+                characters=len(transcript.text),
+            )
+            return {"ok": True, "video_id": video_id, "characters": len(transcript.text)}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("youtube_transcript_task_failed", video_id=video_id, error=str(exc))
+            raise
+
+
+async def fetch_video_transcript_inline(video_id: int) -> dict:
+    """Process a transcript inside the existing API service (no Celery worker required).
+
+    FastAPI awaits async background functions on the app event loop, keeping the
+    async SQLAlchemy engine on its normal loop. Network fetching is moved to a
+    thread by _fetch_video_transcript_async so it doesn't block other API requests.
+    """
+    logger.info("youtube_transcript_inline_start", video_id=video_id)
+    try:
+        return await _fetch_video_transcript_async(video_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("youtube_transcript_inline_failed", video_id=video_id, error=str(exc))
+        return {"ok": False, "video_id": video_id, "error": str(exc)}
+
+
 @shared_task(
     name="video.transcript",
     bind=True,
@@ -255,42 +300,9 @@ async def _process_video_async(video_id: int) -> dict:
     max_retries=2,
 )
 def fetch_video_transcript(self, video_id: int) -> dict:
-    """Fetch only the YouTube transcript, independently of AI processing."""
+    """Celery entry point retained for deployments that run a separate worker."""
     logger.info("youtube_transcript_task_start", video_id=video_id, attempt=self.request.retries + 1)
-
-    async def _run_transcript() -> dict:
-        async with AsyncSessionLocal() as db:
-            svc = VideoService(db)
-            video = await svc.videos.get_by_id(video_id)
-            if not video or video.source.value != "YOUTUBE":
-                return {"ok": False, "reason": "not_youtube"}
-
-            external_id = video.external_id or extract_video_id(video.url)
-            try:
-                transcript = await asyncio.to_thread(fetch_transcript, external_id)
-                await svc.videos.update_analysis_content(
-                    video_id,
-                    transcript=transcript.text,
-                    language=transcript.language or "auto",
-                    model_used="youtube-transcript",
-                )
-                await db.commit()
-                logger.info(
-                    "youtube_transcript_ready",
-                    video_id=video_id,
-                    language=transcript.language,
-                    characters=len(transcript.text),
-                )
-                return {"ok": True, "video_id": video_id, "characters": len(transcript.text)}
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("youtube_transcript_task_failed", video_id=video_id, error=str(exc))
-                # Let Celery perform its short automatic retry. This failure is
-                # isolated to transcript extraction; the playable video itself
-                # is never marked FAILED.
-                raise
-
-    return _run(_run_transcript())
-
+    return _run(_fetch_video_transcript_async(video_id))
 
 @shared_task(
     name="video.process",
