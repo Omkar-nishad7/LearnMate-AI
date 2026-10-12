@@ -1,5 +1,4 @@
 import asyncio
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import html
 import json
 import re
@@ -444,40 +443,37 @@ def _fetch_transcript_api(video_id: str, languages: list[str]) -> TranscriptResu
 
 
 def fetch_transcript(video_id: str, languages: Optional[list[str]] = None) -> TranscriptResult:
-    """Fetch a real YouTube caption track as quickly as possible.
+    """Fetch a real YouTube caption track, preferring the transcript API.
 
-    The two independent caption providers are attempted in parallel so a slow
-    or blocked provider does not unnecessarily delay a working provider. No
-    transcript is fabricated; manual and publicly exposed generated captions
-    are accepted.
+    The transcript API is tried first because yt-dlp is frequently blocked by
+    YouTube bot checks on hosted servers. yt-dlp remains a fallback only when
+    the transcript API cannot provide captions. No transcript is fabricated.
     """
     langs = languages or ["en", "en-US", "en-GB", "hi"]
     errors: list[str] = []
 
-    def api_fetch():
-        return _fetch_transcript_api(video_id, langs)
-
-    def ytdlp_fetch():
-        return _fetch_transcript_ytdlp(video_id, langs)
-
-    executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="yt-transcript")
-    futures = [executor.submit(api_fetch), executor.submit(ytdlp_fetch)]
     try:
-        for future in as_completed(futures):
-            try:
-                result = future.result()
-                # Do not wait for the slower fallback once a valid transcript
-                # has been returned. Its worker thread may finish in the
-                # background, but it no longer blocks the import task.
-                executor.shutdown(wait=False, cancel_futures=True)
-                return result
-            except Exception as exc:  # noqa: BLE001
-                errors.append(str(exc))
-
-        raise ValidationError(
-            "Unable to fetch YouTube captions. This usually means YouTube did not expose a public caption track "
-            "to the server. The video remains playable; transcript-based AI tools need an accessible caption track."
+        return _fetch_transcript_api(video_id, langs)
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"transcript API: {exc}")
+        logger.warning(
+            "youtube_transcript_api_failed",
+            video_id=video_id,
+            error=str(exc),
         )
-    finally:
-        if any(not future.done() for future in futures):
-            executor.shutdown(wait=False, cancel_futures=True)
+
+    try:
+        return _fetch_transcript_ytdlp(video_id, langs)
+    except Exception as exc:  # noqa: BLE001
+        errors.append(f"yt-dlp: {exc}")
+        logger.warning(
+            "youtube_transcript_ytdlp_failed",
+            video_id=video_id,
+            error=str(exc),
+        )
+
+    raise ValidationError(
+        "Unable to fetch YouTube captions. YouTube may be blocking transcript access "
+        "from the deployed server, or the video may not expose a public caption track. "
+        "The video remains playable; transcript-based AI tools require accessible captions."
+    )
