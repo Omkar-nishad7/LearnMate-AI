@@ -4,6 +4,16 @@ LearnMate AI is an AI-assisted learning platform with separate student and teach
 
 > **Release status:** This repository contains deployment configuration and automated checks, but it is not a claim that a live production deployment or every end-to-end workflow has been verified. Review `RELEASE-READINESS.md` and `docs/DEPLOY.md` before launching publicly.
 
+
+## Live website and homepage preview
+
+- **Live website:** <https://learnmate-ai-frontend.vercel.app>
+
+The following screenshot shows the LearnMate AI homepage currently presented by the deployed frontend:
+
+![LearnMate AI homepage preview](docs/images/learnmate-ai-homepage.png)
+
+
 ## Technology stack
 
 - **Frontend:** Next.js 15, React 19, Tailwind CSS
