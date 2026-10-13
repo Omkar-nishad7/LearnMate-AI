@@ -11,7 +11,7 @@ LearnMate AI is an AI-assisted learning platform with separate student and teach
 
 The following screenshot shows the LearnMate AI homepage currently presented by the deployed frontend:
 
-![LearnMate AI homepage preview](docs/images/learnmate-ai-homepage.png)
+![LearnMate AI homepage preview](docs/images/LearnMate-AI-Homepage.png)
 
 
 ## Technology stack
