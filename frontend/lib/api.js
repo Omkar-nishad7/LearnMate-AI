@@ -2,6 +2,52 @@ const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL || "/api/v1"
 ).replace(/\/$/, "");
 
+// Prevent a stalled production API from leaving the UI waiting indefinitely.
+// Long-running AI work and uploads get larger windows to preserve existing flows.
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+const AI_REQUEST_TIMEOUT_MS = 120_000;
+const UPLOAD_REQUEST_TIMEOUT_MS = 180_000;
+
+function createTimeoutError(timeoutMs, cause) {
+  return Object.assign(
+    new Error(`Request timed out after ${Math.round(timeoutMs / 1000)} seconds. Please try again.`),
+    { code: "ETIMEDOUT", cause },
+  );
+}
+
+function getRequestTimeout(path, isFormData) {
+  if (isFormData || path === "/videos/upload") {
+    return UPLOAD_REQUEST_TIMEOUT_MS;
+  }
+  if (
+    path === "/ai" ||
+    path.startsWith("/ai/") ||
+    path === "/videos" ||
+    /^\/videos\/\d+\/reprocess$/.test(path)
+  ) {
+    return AI_REQUEST_TIMEOUT_MS;
+  }
+  return DEFAULT_REQUEST_TIMEOUT_MS;
+}
+
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const cleanup = () => clearTimeout(timeoutId);
+
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    // Keep the timeout active while the response body is being read too.
+    return { response, cleanup, signal: controller.signal };
+  } catch (error) {
+    cleanup();
+    if (error?.name === "AbortError") {
+      throw createTimeoutError(timeoutMs, error);
+    }
+    throw error;
+  }
+}
+
 function buildUrl(path, params) {
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
   const combined = `${API_BASE_URL}${cleanPath}`;
@@ -92,7 +138,8 @@ async function request(
     finalHeaders.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(url.toString(), {
+  const timeoutMs = getRequestTimeout(path, isFormData);
+  const timedRequest = await fetchWithTimeout(url.toString(), {
     method,
     headers: finalHeaders,
     body:
@@ -101,31 +148,37 @@ async function request(
         : isFormData
           ? body
           : JSON.stringify(body),
-  });
+  }, timeoutMs);
+  const res = timedRequest.response;
 
   // Access tokens are short-lived. Rotate the refresh token once and retry
   // the original request, avoiding an infinite refresh loop.
   if (res.status === 401 && allowRefresh && typeof window !== "undefined") {
+    timedRequest.cleanup();
     const refreshToken = localStorage.getItem("lm_refresh");
 
     if (refreshToken && path !== "/auth/refresh") {
       try {
         const refreshUrl = buildUrl("/auth/refresh");
-        const refreshResponse = await fetch(refreshUrl.toString(), {
+        const timedRefresh = await fetchWithTimeout(refreshUrl.toString(), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ refresh_token: refreshToken }),
-        });
+        }, DEFAULT_REQUEST_TIMEOUT_MS);
 
-        if (refreshResponse.ok) {
-          const refreshData = await refreshResponse.json();
-          saveRefreshedTokens(refreshData);
-          return request(
-            method,
-            path,
-            { body, params, headers, responseType },
-            false,
-          );
+        try {
+          if (timedRefresh.response.ok) {
+            const refreshData = await timedRefresh.response.json();
+            saveRefreshedTokens(refreshData);
+            return request(
+              method,
+              path,
+              { body, params, headers, responseType },
+              false,
+            );
+          }
+        } finally {
+          timedRefresh.cleanup();
         }
       } catch {
         // Fall through to the original 401 error below.
@@ -135,7 +188,17 @@ async function request(
     }
   }
 
-  const data = await parseResponse(res, responseType);
+  let data;
+  try {
+    data = await parseResponse(res, responseType);
+  } catch (error) {
+    if (timedRequest.signal.aborted) {
+      throw createTimeoutError(timeoutMs, error);
+    }
+    throw error;
+  } finally {
+    timedRequest.cleanup();
+  }
 
   if (!res.ok) {
     const rawMessage = data?.detail ?? data?.message ?? data?.error;
