@@ -1,23 +1,30 @@
 const { test, expect } = require("@playwright/test");
-const rand = () => Math.random().toString(36).slice(2, 8);
+const rand = () => Math.random().toString(36).slice(2, 10);
 
-test("teacher creates course, module, lesson, publishes", async ({ page }) => {
+test("teacher creates and publishes a course with a module and lesson", async ({ page }) => {
   const email = `e2e_teacher_${rand()}@example.com`;
-  await page.goto("/register");
-  await page.fill('input[name="full_name"]', "E2E Teacher");
-  await page.fill('input[name="email"]', email);
-  await page.fill('input[name="password"]', "Secret123");
-  await page.selectOption('select[name="role"]', "TEACHER");
-  await page.click('button[type="submit"]');
-  await page.waitForURL(/\/login/);
-  await page.fill('input[name="email"]', email);
-  await page.fill('input[name="password"]', "Secret123");
-  await page.click('button[type="submit"]');
-  await expect(page).toHaveURL(/\/app\/teacher\/dashboard/);
 
-  await page.goto("/app/teacher/course-builder");
-  await page.fill('input[name="title"]', "Playwright Course");
-  await page.click('button[type="submit"]');
-  await expect(page).toHaveURL(/course-builder\?id=\d+/);
-  await expect(page.locator("text=Modules & lessons")).toBeVisible();
+  await page.goto("/auth/register");
+  await page.locator('input[type="text"]').fill("E2E Teacher");
+  await page.locator('input[type="email"]').fill(email);
+  await page.locator('input[type="password"]').fill("Secret123");
+  await page.locator("select").selectOption("TEACHER");
+  await page.getByRole("button", { name: /create account/i }).click();
+  await expect(page).toHaveURL(/\/teacher\/dashboard(?:[/?#]|$)/, { timeout: 20_000 });
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("lm_access"))).toBeTruthy();
+
+  await page.goto("/teacher/courses/new");
+  await page.getByPlaceholder(/Data Structures and Algorithms/i).fill("Playwright Course");
+  await page.getByPlaceholder(/Explain what students will learn/i).fill("A course created by the Playwright end-to-end test.");
+  await page.getByRole("button", { name: /Next: Add Content/i }).click();
+
+  await page.getByPlaceholder(/Introduction and Fundamentals/i).fill("Playwright Module");
+  await page.getByPlaceholder(/Lesson 1 title/i).fill("Playwright Lesson");
+  await page.getByRole("button", { name: /Next: Settings/i }).click();
+  await page.getByRole("button", { name: /Review Course/i }).click();
+  await expect(page.getByText("Playwright Course").first()).toBeVisible();
+  await page.getByRole("button", { name: /Create & Publish/i }).click();
+
+  await expect(page).toHaveURL(/\/teacher\/courses\/\d+(?:[/?#]|$)/, { timeout: 20_000 });
+  await expect(page.getByText("Playwright Course").first()).toBeVisible();
 });

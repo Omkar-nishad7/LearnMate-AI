@@ -141,9 +141,9 @@ jobs:
             echo 'Database/backend did not become healthy in time.' >&2
             exit 1
           fi
-          # These server-rendered routes are the pages exercised by the E2E suite.
-          curl -fsS --max-time 10 http://127.0.0.1/login >/dev/null
-          curl -fsS --max-time 10 http://127.0.0.1/register >/dev/null
+          # These frontend routes match the current Next.js App Router auth pages.
+          curl -fsS --max-time 10 http://127.0.0.1/auth/login >/dev/null
+          curl -fsS --max-time 10 http://127.0.0.1/auth/register >/dev/null
       - name: Install Playwright deps
         working-directory: tests/e2e
         run: |
