@@ -1,5 +1,7 @@
+import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from fastapi import BackgroundTasks
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,6 +54,7 @@ class AuthService:
         role: UserRole,
         ip: Optional[str] = None,
         user_agent: Optional[str] = None,
+        background_tasks: Optional[BackgroundTasks] = None,
     ) -> tuple[User, str, str]:
         if role == UserRole.ADMIN:
             raise ValidationError("Cannot self-register as ADMIN")
@@ -60,9 +63,12 @@ class AuthService:
         if existing:
             raise ConflictError("Email is already registered")
 
+        # Argon2 is CPU/memory intensive; run it outside the async event loop
+        # so a login/register request cannot stall unrelated API requests.
+        password_hash = await asyncio.to_thread(hash_password, password)
         user = await self.users.create(
             email=email,
-            password_hash=hash_password(password),
+            password_hash=password_hash,
             role=role,
             full_name=full_name,
             status=UserStatus.PENDING,
@@ -74,14 +80,15 @@ class AuthService:
         raw_token = generate_one_time_token()
         await self.users.set_email_verification_token(user, hash_one_time_token(raw_token))
 
-        try:
-            email_service.send_verification_email(user.email, raw_token)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "verification_email_failed_during_registration",
-                user_id=user.id,
-                error=str(exc),
+        if background_tasks is not None:
+            # FastAPI executes synchronous tasks in its thread pool after the
+            # response is sent, avoiding SMTP latency in the registration path.
+            background_tasks.add_task(
+                self._send_verification_email_safely, user.email, raw_token, user.id
             )
+        else:
+            # Keep direct service callers compatible; API routes pass BackgroundTasks.
+            self._send_verification_email_safely(user.email, raw_token, user.id)
 
         await self.audit.log(
             action="auth.register",
@@ -128,7 +135,12 @@ class AuthService:
         user_agent: Optional[str] = None,
     ) -> tuple[User, str, str]:
         user = await self.users.get_by_email(email)
-        if not user or not verify_password(password, user.password_hash):
+        password_valid = (
+            await asyncio.to_thread(verify_password, password, user.password_hash)
+            if user
+            else False
+        )
+        if not user or not password_valid:
             await self.audit.log(
                 action="auth.login_failed",
                 ip_address=ip,
@@ -238,18 +250,49 @@ class AuthService:
         await self.users.mark_email_verified(user)
         await self.db.commit()
 
-    async def resend_verification(self, *, email: str) -> None:
+    @staticmethod
+    def _send_verification_email_safely(email: str, token: str, user_id: int) -> None:
+        try:
+            email_service.send_verification_email(email, token)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "verification_email_delivery_failed",
+                user_id=user_id,
+                error=str(exc),
+            )
+
+    @staticmethod
+    def _send_password_reset_email_safely(email: str, token: str, user_id: int) -> None:
+        try:
+            email_service.send_password_reset_email(email, token)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "password_reset_email_delivery_failed",
+                user_id=user_id,
+                error=str(exc),
+            )
+
+    async def resend_verification(
+        self, *, email: str, background_tasks: Optional[BackgroundTasks] = None
+    ) -> None:
         user = await self.users.get_by_email(email)
         if not user or user.is_email_verified:
             # Do not leak account existence
             return
         raw = generate_one_time_token()
         await self.users.set_email_verification_token(user, hash_one_time_token(raw))
-        email_service.send_verification_email(user.email, raw)
+        if background_tasks is not None:
+            background_tasks.add_task(
+                self._send_verification_email_safely, user.email, raw, user.id
+            )
+        else:
+            self._send_verification_email_safely(user.email, raw, user.id)
         await self.db.commit()
 
     # ---------- Password reset ----------
-    async def forgot_password(self, *, email: str) -> None:
+    async def forgot_password(
+        self, *, email: str, background_tasks: Optional[BackgroundTasks] = None
+    ) -> None:
         user = await self.users.get_by_email(email)
         if not user:
             # Do not leak account existence
@@ -257,7 +300,12 @@ class AuthService:
         raw = generate_one_time_token()
         expires = datetime.now(timezone.utc) + timedelta(minutes=30)
         await self.users.set_password_reset_token(user, hash_one_time_token(raw), expires)
-        email_service.send_password_reset_email(user.email, raw)
+        if background_tasks is not None:
+            background_tasks.add_task(
+                self._send_password_reset_email_safely, user.email, raw, user.id
+            )
+        else:
+            self._send_password_reset_email_safely(user.email, raw, user.id)
         await self.audit.log(action="auth.password_reset_requested", user_id=user.id)
         await self.db.commit()
 

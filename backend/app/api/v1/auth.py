@@ -1,6 +1,6 @@
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AuthenticationError
@@ -51,6 +51,7 @@ def _token_pair(access: str, refresh: str) -> TokenPair:
 async def register(
     payload: RegisterRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     ip, ua = _client_meta(request)
@@ -62,6 +63,7 @@ async def register(
         role=payload.role,
         ip=ip,
         user_agent=ua,
+        background_tasks=background_tasks,
     )
     return RegisterResponse(
         user=UserOut.model_validate(user),
@@ -144,9 +146,12 @@ async def verify_email(
 )
 async def resend_verification(
     payload: ForgotPasswordRequest,  # same shape: {email}
+    background_tasks: BackgroundTasks,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    await AuthService(db).resend_verification(email=payload.email)
+    await AuthService(db).resend_verification(
+        email=payload.email, background_tasks=background_tasks
+    )
     return MessageResponse(message="If the account exists, a verification email has been sent.")
 
 
@@ -158,9 +163,12 @@ async def resend_verification(
 )
 async def forgot_password(
     payload: ForgotPasswordRequest,
+    background_tasks: BackgroundTasks,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    await AuthService(db).forgot_password(email=payload.email)
+    await AuthService(db).forgot_password(
+        email=payload.email, background_tasks=background_tasks
+    )
     return MessageResponse(message="If the account exists, a reset email has been sent.")
 
 
