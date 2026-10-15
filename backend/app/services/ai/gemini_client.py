@@ -83,6 +83,15 @@ class GeminiClient:
                 "Gemini rejected the configured API key or its permissions. Check GEMINI_API_KEY and API access."
             ) from exc
 
+        if (
+            status == 503
+            or "service unavailable" in message
+            or "high demand" in message
+        ):
+            raise AIUnavailableError(
+                "Gemini is temporarily overloaded. Please try again shortly."
+            ) from exc
+
         if status == 404 or any(term in message for term in (
             "model not found", "not_found", "is not found for api version",
             "model is unavailable", "unknown model"
@@ -125,7 +134,10 @@ class GeminiClient:
         reraise=True,
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=8),
-        retry=retry_if_exception_type((AIUnavailableError, AITimeoutError)),
+        # Retry timeouts only. Provider availability/model errors (including
+        # HTTP 503) should fail promptly rather than repeating a known-failing
+        # generation request and increasing tutor latency.
+        retry=retry_if_exception_type(AITimeoutError),
     )
     def _generate(
         self,
@@ -166,69 +178,6 @@ class GeminiClient:
         except TimeoutError as exc:
             raise AITimeoutError("Gemini did not respond in time. Please retry.") from exc
         except Exception as exc:  # noqa: BLE001
-            # A 503 from Gemini usually means temporary model capacity pressure,
-            # not a malformed prompt. Try the configured fallback once before
-            # allowing the normal transient-error retry policy to run.
-            raw_status = getattr(exc, "code", None) or getattr(exc, "status_code", None)
-            try:
-                provider_status = int(raw_status) if raw_status is not None else None
-            except (TypeError, ValueError):
-                provider_status = None
-            provider_message = str(exc).lower()
-            fallback_model = (settings.GEMINI_FALLBACK_MODEL or "").strip()
-            # Gemini 2.5 Flash is no longer available to some/new API users.
-            # Normalize stale deployment settings so fallback actually works.
-            configured_fallback_model = fallback_model
-            fallback_model_id = fallback_model.rsplit("/", 1)[-1].lower()
-            if fallback_model_id == "gemini-2.5-flash":
-                fallback_model = "gemini-3.6-flash"
-                logger.warning(
-                    "gemini_fallback_model_upgraded",
-                    configured_fallback_model=configured_fallback_model,
-                    fallback_model=fallback_model,
-                    reason="gemini-2.5-flash is unavailable to this API key",
-                )
-            is_overloaded = provider_status == 503 or "unavailable" in provider_message
-
-            if is_overloaded and fallback_model and fallback_model != self.model_name:
-                logger.warning(
-                    "gemini_fallback_model_attempt",
-                    primary_model=self.model_name,
-                    fallback_model=fallback_model,
-                    provider_status=provider_status or 503,
-                )
-                try:
-                    fallback_config_kwargs = dict(config_kwargs)
-                    if self._uses_gemini_36_or_newer(fallback_model):
-                        fallback_config_kwargs.pop("temperature", None)
-                    elif "temperature" not in fallback_config_kwargs:
-                        fallback_config_kwargs["temperature"] = temperature
-                    fallback_response = self.client.models.generate_content(
-                        model=fallback_model,
-                        contents=prompt,
-                        config=types.GenerateContentConfig(**fallback_config_kwargs),
-                    )
-                    fallback_text = (fallback_response.text or "").strip()
-                    if not fallback_text:
-                        raise AIInvalidOutputError("Gemini fallback returned an empty response")
-                    fallback_usage = getattr(fallback_response, "usage_metadata", None)
-                    fallback_tokens = int(getattr(fallback_usage, "total_token_count", 0) or 0)
-                    logger.info(
-                        "gemini_fallback_model_succeeded",
-                        primary_model=self.model_name,
-                        fallback_model=fallback_model,
-                    )
-                    return fallback_text, fallback_tokens
-                except AIInvalidOutputError:
-                    raise
-                except Exception as fallback_exc:  # noqa: BLE001
-                    logger.warning(
-                        "gemini_fallback_model_failed",
-                        fallback_model=fallback_model,
-                        error=str(fallback_exc),
-                    )
-                    self._raise_provider_error(fallback_exc, "gemini_fallback_call_failed")
-
             self._raise_provider_error(exc, "gemini_call_failed")
 
     def generate_text(

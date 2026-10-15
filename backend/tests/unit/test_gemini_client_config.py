@@ -54,32 +54,29 @@ def test_invalid_argument_provider_error_is_not_retryable():
     assert exc_info.value.code == "AI_INVALID_REQUEST"
 
 
-def test_generate_falls_back_when_primary_model_returns_503(monkeypatch):
-    from app.config.settings import settings
+def test_generate_does_not_fallback_or_retry_on_primary_503():
+    from app.core.ai_exceptions import AIUnavailableError
 
-    monkeypatch.setattr(settings, "GEMINI_FALLBACK_MODEL", "gemini-2.5-flash")  # stale Render setting
     client = object.__new__(GeminiClient)
     client.model_name = "gemini-3.8-flash"
     client.client = MagicMock()
 
-    overloaded = RuntimeError("503 UNAVAILABLE: model is experiencing high demand")
-    overloaded.code = 503
-    client.client.models.generate_content.side_effect = [
-        overloaded,
-        SimpleNamespace(
-            text="Fallback tutor response",
-            usage_metadata=SimpleNamespace(total_token_count=11),
-        ),
-    ]
-
-    text, tokens = client._generate(
-        prompt="Explain binary search.",
-        temperature=0.5,
-        max_output_tokens=256,
+    overloaded = RuntimeError(
+        "503 UNAVAILABLE: This model is currently experiencing high demand"
     )
+    overloaded.code = 503
+    overloaded.status = "UNAVAILABLE"
+    client.client.models.generate_content.side_effect = overloaded
 
-    assert text == "Fallback tutor response"
-    assert tokens == 11
-    assert client.client.models.generate_content.call_count == 2
-    assert client.client.models.generate_content.call_args_list[0].kwargs["model"] == "gemini-3.8-flash"
-    assert client.client.models.generate_content.call_args_list[1].kwargs["model"] == "gemini-3.6-flash"
+    with pytest.raises(AIUnavailableError, match="temporarily overloaded"):
+        client._generate(
+            prompt="Explain binary search.",
+            temperature=0.5,
+            max_output_tokens=256,
+        )
+
+    assert client.client.models.generate_content.call_count == 1
+    assert (
+        client.client.models.generate_content.call_args.kwargs["model"]
+        == "gemini-3.8-flash"
+    )
