@@ -12,6 +12,12 @@ class AIUnavailableError(AIError):
     message = "AI service is currently unavailable"
 
 
+class AIInvalidRequestError(AIError):
+    code = "AI_INVALID_REQUEST"
+    status_code = 400
+    message = "Gemini rejected the request configuration"
+
+
 class AITimeoutError(AIError):
     code = "AI_TIMEOUT"
     status_code = 504

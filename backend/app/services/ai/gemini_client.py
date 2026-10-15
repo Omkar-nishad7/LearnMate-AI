@@ -11,6 +11,7 @@ from app.config.logging import get_logger
 from app.config.settings import settings
 from app.core.ai_exceptions import (
     AIInvalidOutputError,
+    AIInvalidRequestError,
     AINotConfiguredError,
     AIRateLimitedError,
     AITimeoutError,
@@ -30,6 +31,23 @@ class GeminiClient:
     """
 
     _client: Optional[genai.Client] = None
+
+    @staticmethod
+    def _uses_gemini_36_or_newer(model_name: str) -> bool:
+        """Return whether the model no longer accepts sampling parameters.
+
+        Gemini 3.6+ and Gemini 4+ models deprecate/ignore ``temperature``
+        and newer API versions may reject it with INVALID_ARGUMENT. Strip a
+        possible ``models/`` prefix before inspecting the model ID.
+        """
+        model_id = model_name.rsplit("/", 1)[-1].lower()
+        match = re.match(r"^gemini-(\d+)(?:\.(\d+))?(?:-|$)", model_id)
+        if not match:
+            return False
+
+        major = int(match.group(1))
+        minor = int(match.group(2) or 0)
+        return major >= 4 or (major == 3 and minor >= 6)
 
     @staticmethod
     def _raise_provider_error(exc: Exception, event: str) -> None:
@@ -80,6 +98,15 @@ class GeminiClient:
                 "Gemini did not respond in time. Please retry."
             ) from exc
 
+        status_name = str(getattr(exc, "status", "")).lower()
+        if status in (400, 422) or "invalid_argument" in status_name or "invalid_argument" in message:
+            # A malformed/unsupported request will not improve through retry;
+            # report a clear client/configuration error instead of spending
+            # multiple seconds retrying it as a generic 502.
+            raise AIInvalidRequestError(
+                "Gemini rejected the request configuration. Check backend logs for details."
+            ) from exc
+
         raise AIUnavailableError(
             "Gemini could not complete the request. Check the backend logs for the provider error."
         ) from exc
@@ -110,12 +137,17 @@ class GeminiClient:
         system_instruction: Optional[str] = None,
     ) -> tuple[str, int]:
         try:
-            config = types.GenerateContentConfig(
-                temperature=temperature,
-                max_output_tokens=max_output_tokens,
-                system_instruction=system_instruction,
-                response_mime_type="application/json" if json_mode else "text/plain",
-            )
+            config_kwargs = {
+                "max_output_tokens": max_output_tokens,
+                "system_instruction": system_instruction,
+                "response_mime_type": "application/json" if json_mode else "text/plain",
+            }
+            # Gemini 3.6+ and 4+ no longer support custom sampling controls.
+            # Passing the tutor's legacy temperature=0.5 to Gemini 3.8 can
+            # cause INVALID_ARGUMENT, which was previously surfaced as a 502.
+            if not self._uses_gemini_36_or_newer(self.model_name):
+                config_kwargs["temperature"] = temperature
+            config = types.GenerateContentConfig(**config_kwargs)
             response = self.client.models.generate_content(
                 model=self.model_name,
                 contents=prompt,
