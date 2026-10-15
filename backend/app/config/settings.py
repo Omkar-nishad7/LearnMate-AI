@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-3.8-flash"
     # Used only when the primary model returns a transient 503/UNAVAILABLE.
-    GEMINI_FALLBACK_MODEL: str = "gemini-2.5-flash"
+    GEMINI_FALLBACK_MODEL: str = "gemini-3.6-flash"
     YOUTUBE_API_KEY: str = ""
 
     # Storage

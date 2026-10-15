@@ -176,6 +176,18 @@ class GeminiClient:
                 provider_status = None
             provider_message = str(exc).lower()
             fallback_model = (settings.GEMINI_FALLBACK_MODEL or "").strip()
+            # Gemini 2.5 Flash is no longer available to some/new API users.
+            # Normalize stale deployment settings so fallback actually works.
+            configured_fallback_model = fallback_model
+            fallback_model_id = fallback_model.rsplit("/", 1)[-1].lower()
+            if fallback_model_id == "gemini-2.5-flash":
+                fallback_model = "gemini-3.6-flash"
+                logger.warning(
+                    "gemini_fallback_model_upgraded",
+                    configured_fallback_model=configured_fallback_model,
+                    fallback_model=fallback_model,
+                    reason="gemini-2.5-flash is unavailable to this API key",
+                )
             is_overloaded = provider_status == 503 or "unavailable" in provider_message
 
             if is_overloaded and fallback_model and fallback_model != self.model_name:

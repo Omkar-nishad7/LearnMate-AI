@@ -57,7 +57,7 @@ def test_invalid_argument_provider_error_is_not_retryable():
 def test_generate_falls_back_when_primary_model_returns_503(monkeypatch):
     from app.config.settings import settings
 
-    monkeypatch.setattr(settings, "GEMINI_FALLBACK_MODEL", "gemini-2.5-flash")
+    monkeypatch.setattr(settings, "GEMINI_FALLBACK_MODEL", "gemini-2.5-flash")  # stale Render setting
     client = object.__new__(GeminiClient)
     client.model_name = "gemini-3.8-flash"
     client.client = MagicMock()
@@ -82,4 +82,4 @@ def test_generate_falls_back_when_primary_model_returns_503(monkeypatch):
     assert tokens == 11
     assert client.client.models.generate_content.call_count == 2
     assert client.client.models.generate_content.call_args_list[0].kwargs["model"] == "gemini-3.8-flash"
-    assert client.client.models.generate_content.call_args_list[1].kwargs["model"] == "gemini-2.5-flash"
+    assert client.client.models.generate_content.call_args_list[1].kwargs["model"] == "gemini-3.6-flash"
