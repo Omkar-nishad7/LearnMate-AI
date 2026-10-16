@@ -1,5 +1,7 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
+
+from app.config.settings import settings
 
 from app.services.ai.gemini_client import GeminiClient
 
@@ -84,3 +86,21 @@ async def test_invalid_gemini_output_for_json_endpoint(client):
         )
     assert r.status_code == 502
     assert r.json()["error"]["code"] == "AI_INVALID_OUTPUT"
+
+
+@pytest.mark.asyncio
+async def test_tutor_uses_dedicated_model(client):
+    token = await _mk(client, "tutor_model@example.com", "STUDENT")
+
+    with patch("app.services.ai.tutor_service.GeminiClient") as gemini_factory:
+        gemini_factory.return_value.generate_text_async = AsyncMock(
+            return_value=("Tutor response", 5)
+        )
+        response = await client.post(
+            "/api/v1/ai/tutor",
+            json={"message": "Explain recursion."},
+            headers=_auth(token),
+        )
+
+    assert response.status_code == 200, response.text
+    gemini_factory.assert_called_once_with(model=settings.GEMINI_TUTOR_MODEL)

@@ -4,6 +4,7 @@ import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.logging import get_logger
+from app.config.settings import settings
 from app.core.ai_exceptions import AIInvalidOutputError
 from app.models.ai import AIConversation, AIMessage
 from app.repositories.ai_repository import AIRepository
@@ -123,7 +124,9 @@ class TutorService:
         )
 
         try:
-            text, tokens = await GeminiClient().generate_text_async(
+            text, tokens = await GeminiClient(
+                model=settings.GEMINI_TUTOR_MODEL
+            ).generate_text_async(
                 prompt=prompt, temperature=0.5, max_output_tokens=2048
             )
         except Exception as e:

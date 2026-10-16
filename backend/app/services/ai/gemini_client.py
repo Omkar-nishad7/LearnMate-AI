@@ -50,7 +50,9 @@ class GeminiClient:
         return major >= 4 or (major == 3 and minor >= 6)
 
     @staticmethod
-    def _raise_provider_error(exc: Exception, event: str) -> None:
+    def _raise_provider_error(
+        exc: Exception, event: str, model: Optional[str] = None
+    ) -> None:
         """Log provider details server-side and return a useful safe error."""
         raw_status = getattr(exc, "code", None) or getattr(exc, "status_code", None)
         try:
@@ -64,7 +66,7 @@ class GeminiClient:
         logger.warning(
             event,
             provider_status=status,
-            model=settings.GEMINI_MODEL,
+            model=model or settings.GEMINI_MODEL,
             error=str(exc),
         )
 
@@ -134,9 +136,8 @@ class GeminiClient:
         reraise=True,
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=8),
-        # Retry timeouts only. Provider availability/model errors (including
-        # HTTP 503) should fail promptly rather than repeating a known-failing
-        # generation request and increasing tutor latency.
+        # Retry timeouts only. A model overload/availability error (HTTP 503)
+        # should fail promptly instead of repeating the same generation call.
         retry=retry_if_exception_type(AITimeoutError),
     )
     def _generate(
@@ -178,7 +179,7 @@ class GeminiClient:
         except TimeoutError as exc:
             raise AITimeoutError("Gemini did not respond in time. Please retry.") from exc
         except Exception as exc:  # noqa: BLE001
-            self._raise_provider_error(exc, "gemini_call_failed")
+            self._raise_provider_error(exc, "gemini_call_failed", model=self.model_name)
 
     def generate_text(
         self,
@@ -226,7 +227,7 @@ class GeminiClient:
             except AIInvalidOutputError:
                 raise
             except Exception as exc:  # noqa: BLE001
-                self._raise_provider_error(exc, "gemini_json_call_failed")
+                self._raise_provider_error(exc, "gemini_json_call_failed", model=self.model_name)
 
         text, tokens = self._generate(
             prompt=prompt,
@@ -263,7 +264,7 @@ class GeminiClient:
         except TimeoutError as exc:
             raise AITimeoutError("Gemini did not respond in time. Please retry.") from exc
         except Exception as exc:  # noqa: BLE001
-            self._raise_provider_error(exc, "gemini_youtube_analysis_failed")
+            self._raise_provider_error(exc, "gemini_youtube_analysis_failed", model=self.model_name)
 
     def generate_video_analysis(self, *, video_bytes: bytes, mime_type: str, prompt: str) -> tuple[str, int]:
         """Send an uploaded video to Gemini Files API and analyze its content."""
@@ -295,7 +296,7 @@ class GeminiClient:
         except AIInvalidOutputError:
             raise
         except Exception as exc:  # noqa: BLE001
-            self._raise_provider_error(exc, "gemini_video_analysis_failed")
+            self._raise_provider_error(exc, "gemini_video_analysis_failed", model=self.model_name)
         finally:
             try:
                 temp_path.unlink(missing_ok=True)

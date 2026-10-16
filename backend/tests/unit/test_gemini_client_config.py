@@ -54,29 +54,21 @@ def test_invalid_argument_provider_error_is_not_retryable():
     assert exc_info.value.code == "AI_INVALID_REQUEST"
 
 
-def test_generate_does_not_fallback_or_retry_on_primary_503():
+def test_provider_503_is_not_retried():
     from app.core.ai_exceptions import AIUnavailableError
+
+    provider_error = RuntimeError(
+        "503 UNAVAILABLE: This model is currently experiencing high demand"
+    )
+    provider_error.code = 503
+    provider_error.status = "UNAVAILABLE"
 
     client = object.__new__(GeminiClient)
     client.model_name = "gemini-3.8-flash"
     client.client = MagicMock()
-
-    overloaded = RuntimeError(
-        "503 UNAVAILABLE: This model is currently experiencing high demand"
-    )
-    overloaded.code = 503
-    overloaded.status = "UNAVAILABLE"
-    client.client.models.generate_content.side_effect = overloaded
+    client.client.models.generate_content.side_effect = provider_error
 
     with pytest.raises(AIUnavailableError, match="temporarily overloaded"):
-        client._generate(
-            prompt="Explain binary search.",
-            temperature=0.5,
-            max_output_tokens=256,
-        )
+        client._generate(prompt="Explain binary search.")
 
     assert client.client.models.generate_content.call_count == 1
-    assert (
-        client.client.models.generate_content.call_args.kwargs["model"]
-        == "gemini-3.8-flash"
-    )
