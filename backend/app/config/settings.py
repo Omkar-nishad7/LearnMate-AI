@@ -36,10 +36,8 @@ class Settings(BaseSettings):
 
     # Gemini
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-3.8-flash"
-    # Use the high-volume Flash-Lite model directly for student tutor chat.
-    # Other AI features continue using GEMINI_MODEL.
-    GEMINI_TUTOR_MODEL: str = "gemini-3.5-flash-lite"
+    # High-throughput model; production environment can override this value.
+    GEMINI_MODEL: str = "gemini-3.5-flash-lite"
     YOUTUBE_API_KEY: str = ""
 
     # Storage

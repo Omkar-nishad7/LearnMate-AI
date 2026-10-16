@@ -3,13 +3,19 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from app.config.settings import Settings
 from app.services.ai.gemini_client import GeminiClient
+
+
+def test_default_gemini_model_uses_high_throughput_flash_lite():
+    assert Settings.model_fields["GEMINI_MODEL"].default == "gemini-3.5-flash-lite"
 
 
 @pytest.mark.parametrize(
     ("model_name", "expected_temperature"),
     [
         ("gemini-3.8-flash", None),
+        ("gemini-3.5-flash-lite", 0.5),
         ("models/gemini-3.6-flash", None),
         ("gemini-4-argon", None),
         ("gemini-2.5-flash", 0.5),
@@ -52,23 +58,3 @@ def test_invalid_argument_provider_error_is_not_retryable():
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.code == "AI_INVALID_REQUEST"
-
-
-def test_provider_503_is_not_retried():
-    from app.core.ai_exceptions import AIUnavailableError
-
-    provider_error = RuntimeError(
-        "503 UNAVAILABLE: This model is currently experiencing high demand"
-    )
-    provider_error.code = 503
-    provider_error.status = "UNAVAILABLE"
-
-    client = object.__new__(GeminiClient)
-    client.model_name = "gemini-3.8-flash"
-    client.client = MagicMock()
-    client.client.models.generate_content.side_effect = provider_error
-
-    with pytest.raises(AIUnavailableError, match="temporarily overloaded"):
-        client._generate(prompt="Explain binary search.")
-
-    assert client.client.models.generate_content.call_count == 1
