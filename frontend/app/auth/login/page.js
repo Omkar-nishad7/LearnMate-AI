@@ -8,9 +8,10 @@ import { toast } from "sonner";
 import { loginUser } from "@/services/auth";
 
 function dashboardForRole(role) {
-  return String(role || "").toUpperCase() === "TEACHER"
-    ? "/teacher/dashboard"
-    : "/student/dashboard";
+  const normalized = String(role || "").toUpperCase();
+  if (normalized === "ADMIN") return "/admin/dashboard";
+  if (normalized === "TEACHER") return "/teacher/dashboard";
+  return "/student/dashboard";
 }
 
 export default function LoginPage() {

@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export function middleware(request) {
   const token = request.cookies.get("lm_access")?.value;
   const { pathname } = request.nextUrl;
-  const isProtectedPage = pathname.startsWith("/student") || pathname.startsWith("/teacher");
+  const isProtectedPage = pathname.startsWith("/student") || pathname.startsWith("/teacher") || pathname.startsWith("/admin");
 
   if (isProtectedPage && !token) {
     return NextResponse.redirect(new URL("/auth/login", request.url));
@@ -13,5 +13,5 @@ export function middleware(request) {
 }
 
 export const config = {
-  matcher: ["/student/:path*", "/teacher/:path*"]
+  matcher: ["/student/:path*", "/teacher/:path*", "/admin/:path*"]
 };

@@ -4,6 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { session, getCurrentUser } from "@/lib/auth";
 
+function dashboardForRole(role) {
+  const normalized = String(role || "").toUpperCase();
+  if (normalized === "ADMIN") return "/admin/dashboard";
+  if (normalized === "TEACHER") return "/teacher/dashboard";
+  return "/student/dashboard";
+}
+
 export function useAuth({ required = false, role } = {}) {
   const router = useRouter();
   const [user, setUser] = useState(session.user);
@@ -26,7 +33,7 @@ export function useAuth({ required = false, role } = {}) {
     if (cachedUser) {
       setUser(cachedUser);
       if (role && cachedUser.role && String(cachedUser.role).toUpperCase() !== String(role).toUpperCase()) {
-        router.replace(String(cachedUser.role).toUpperCase() === "TEACHER" ? "/teacher/dashboard" : "/student/dashboard");
+        router.replace(dashboardForRole(cachedUser.role));
       }
       setLoading(false);
     }
@@ -39,7 +46,7 @@ export function useAuth({ required = false, role } = {}) {
         if (data) setUser(data);
 
         if (role && data?.role && String(data.role).toUpperCase() !== String(role).toUpperCase()) {
-          router.replace(String(data.role).toUpperCase() === "TEACHER" ? "/teacher/dashboard" : "/student/dashboard");
+          router.replace(dashboardForRole(data.role));
         }
       } catch {
         if (cancelled) return;
