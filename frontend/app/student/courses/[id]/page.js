@@ -12,11 +12,6 @@ import {
   Clock3,
   LockKeyhole,
   UserRound,
-  ChevronDown,
-  ChevronUp,
-  Clock,
-  Layers3,
-  GraduationCap,
 } from "lucide-react";
 import Sidebar from "@/components/layout/Sidebar";
 import Navbar from "@/components/layout/Navbar";
@@ -68,7 +63,6 @@ export default function StudentCourseDetailPage() {
   const [unenrolling, setUnenrolling] = useState(false);
   const [error, setError] = useState("");
   const [assignmentError, setAssignmentError] = useState("");
-  const [expandedModules, setExpandedModules] = useState({});
 
   async function load() {
     if (!id) return;
@@ -85,11 +79,6 @@ export default function StudentCourseDetailPage() {
 
       setCourse(courseData);
       setUser(me);
-      setExpandedModules((current) => {
-        if (Object.keys(current).length) return current;
-        const firstModule = courseData?.modules?.[0];
-        return firstModule ? { [firstModule.id]: true } : {};
-      });
 
       if (courseData?.teacher_id) {
         fetchTeacherProfile(courseData.teacher_id)
@@ -214,56 +203,39 @@ export default function StudentCourseDetailPage() {
                   <p className="mt-4 text-sm text-slate-500">Loading course…</p>
                 </Card>
               ) : course ? (
-                <section className="overflow-hidden rounded-3xl bg-slate-950 shadow-xl">
-                  {course.thumbnail_url ? (
-                    <div className="relative h-44 w-full overflow-hidden sm:h-56 lg:h-64">
-                      <img
-                        src={course.thumbnail_url}
-                        alt={`${course.title} course thumbnail`}
-                        className="h-full w-full object-cover"
-                        onError={(event) => {
-                          event.currentTarget.style.display = "none";
-                        }}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/45 to-slate-950/10" />
-                    </div>
-                  ) : null}
-                  <div className="p-6 sm:p-8">
-                    <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-                      <div className="max-w-3xl">
-                        <div className="flex flex-wrap gap-2 text-xs font-bold">
-                          <span className="rounded-full bg-blue-500/15 px-3 py-1 text-blue-200">
-                            {course.category || "General"}
-                          </span>
-                          <span className="rounded-full bg-white/10 px-3 py-1 text-slate-200">
-                            {course.difficulty || "All levels"}
-                          </span>
-                          <span className="rounded-full bg-white/10 px-3 py-1 text-slate-200">
-                            {course.language || "English"}
-                          </span>
-                        </div>
-                        <h1 className="mt-4 text-3xl font-black tracking-tight text-white sm:text-4xl">
-                          {course.title}
-                        </h1>
-                        <p className="mt-3 text-sm leading-6 text-slate-300 sm:text-base">
-                          {course.short_description ||
-                            course.description ||
-                            "Continue learning from your course content."}
-                        </p>
+                <section className="overflow-hidden rounded-3xl bg-slate-950 p-6 shadow-xl sm:p-8">
+                  <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                    <div className="max-w-3xl">
+                      <div className="flex flex-wrap gap-2 text-xs font-bold">
+                        <span className="rounded-full bg-blue-500/15 px-3 py-1 text-blue-200">
+                          {course.category || "General"}
+                        </span>
+                        <span className="rounded-full bg-white/10 px-3 py-1 text-slate-200">
+                          {course.difficulty || "All levels"}
+                        </span>
+                        <span className="rounded-full bg-white/10 px-3 py-1 text-slate-200">
+                          {course.language || "English"}
+                        </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 sm:min-w-64">
-                        <div className="rounded-2xl bg-white/10 p-4 text-white backdrop-blur">
-                          <p className="text-2xl font-black">
-                            {lessons.length}
-                          </p>
-                          <p className="text-xs text-slate-300">Lessons</p>
-                        </div>
-                        <div className="rounded-2xl bg-white/10 p-4 text-white backdrop-blur">
-                          <p className="text-2xl font-black">
-                            {assignments.length}
-                          </p>
-                          <p className="text-xs text-slate-300">Assignments</p>
-                        </div>
+                      <h1 className="mt-4 text-3xl font-black tracking-tight text-white sm:text-4xl">
+                        {course.title}
+                      </h1>
+                      <p className="mt-3 text-sm leading-6 text-slate-300 sm:text-base">
+                        {course.short_description ||
+                          course.description ||
+                          "Continue learning from your course content."}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:min-w-64">
+                      <div className="rounded-2xl bg-white/10 p-4 text-white backdrop-blur">
+                        <p className="text-2xl font-black">{lessons.length}</p>
+                        <p className="text-xs text-slate-300">Lessons</p>
+                      </div>
+                      <div className="rounded-2xl bg-white/10 p-4 text-white backdrop-blur">
+                        <p className="text-2xl font-black">
+                          {assignments.length}
+                        </p>
+                        <p className="text-xs text-slate-300">Assignments</p>
                       </div>
                     </div>
                   </div>
@@ -322,84 +294,42 @@ export default function StudentCourseDetailPage() {
                 </Card>
               ) : null}
 
-              {!loading && course ? (
-                <section className="grid gap-4 md:grid-cols-3">
-                  <Card className="border-0 p-5 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
-                        <GraduationCap className="h-5 w-5" />
-                      </span>
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                          Level
-                        </p>
-                        <p className="mt-1 font-bold text-slate-900">
-                          {course.difficulty || "All levels"}
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-                  <Card className="border-0 p-5 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
-                        <Clock className="h-5 w-5" />
-                      </span>
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                          Course duration
-                        </p>
-                        <p className="mt-1 font-bold text-slate-900">
-                          {course.duration_minutes
-                            ? `${Math.floor(course.duration_minutes / 60)}h ${course.duration_minutes % 60}m`
-                            : "Self-paced"}
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-                  <Card className="border-0 p-5 shadow-sm">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
-                        <Layers3 className="h-5 w-5" />
-                      </span>
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                          Learning content
-                        </p>
-                        <p className="mt-1 font-bold text-slate-900">
-                          {course.modules?.length || 0} modules ·{" "}
-                          {lessons.length} lessons
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-                </section>
-              ) : null}
-
               {!loading && course && !enrolled ? (
-                <Card className="border-0 p-8 shadow-sm sm:p-10">
-                  <div className="mx-auto max-w-2xl text-center">
-                    {course.thumbnail_url ? (
-                      <img
-                        src={course.thumbnail_url}
-                        alt=""
-                        className="mx-auto mb-5 h-24 w-40 rounded-xl object-cover"
-                      />
-                    ) : null}
-                    <LockKeyhole className="mx-auto h-10 w-10 text-slate-400" />
-                    <h2 className="mt-4 text-xl font-bold text-slate-900">
-                      Enroll to start learning
-                    </h2>
-                    <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">
-                      Enroll to access course videos, assignments and learning
-                      progress.
-                    </p>
-                    <button
-                      disabled={enrolling}
-                      onClick={enroll}
-                      className="btn-primary mt-6"
-                    >
-                      {enrolling ? "Enrolling…" : "Enroll in Course"}
-                    </button>
+                <Card className="border-0 p-6 shadow-sm sm:p-8">
+                  <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
+                    <div>
+                      <div className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                        Demo checkout
+                      </div>
+                      <h2 className="mt-3 text-xl font-bold text-slate-900">
+                        Get full access to this course
+                      </h2>
+                      <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+                        This is a demo purchase flow. No payment will be collected; selecting Buy Now enrolls you in the course and unlocks its available learning content.
+                      </p>
+                    </div>
+                    <div className="min-w-56 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-center">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Course price
+                      </p>
+                      <p className="mt-1 text-3xl font-black tracking-tight text-slate-900">
+                        {course.is_free || !Number(course.price_cents)
+                          ? "Free"
+                          : `₹${(Number(course.price_cents) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                      </p>
+                      <button
+                        type="button"
+                        disabled={enrolling}
+                        onClick={enroll}
+                        className="btn-primary mt-4 w-full justify-center disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {enrolling ? "Enrolling…" : "Buy Now · Demo"}
+                      </button>
+                      <p className="mt-2 text-[11px] text-slate-500">
+                        No real payment required
+                      </p>
+                    </div>
                   </div>
                 </Card>
               ) : null}
@@ -562,109 +492,48 @@ export default function StudentCourseDetailPage() {
                       </div>
                     </div>
                     <div className="mt-5 space-y-3">
-                      {(course.modules || []).length === 0 ||
-                      lessons.length === 0 ? (
+                      {lessons.length === 0 ? (
                         <p className="rounded-2xl bg-slate-50 p-6 text-sm text-slate-500">
                           No lessons have been added yet.
                         </p>
                       ) : (
-                        course.modules.map((module, moduleIndex) => {
-                          const moduleLessons = module.lessons || [];
-                          const expanded = !!expandedModules[module.id];
-                          const moduleMinutes = moduleLessons.reduce(
-                            (total, lesson) =>
-                              total + Number(lesson.duration_minutes || 0),
-                            0,
+                        lessons.map((lesson, index) => {
+                          const attached = videos.find(
+                            (video) =>
+                              Number(video.lesson_id) === Number(lesson.id),
                           );
                           return (
                             <div
-                              key={module.id}
-                              className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
+                              key={lesson.id}
+                              className="flex flex-col gap-4 rounded-2xl border border-slate-200 p-4 sm:flex-row sm:items-center"
                             >
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setExpandedModules((current) => ({
-                                    ...current,
-                                    [module.id]: !current[module.id],
-                                  }))
-                                }
-                                aria-expanded={expanded}
-                                className="flex w-full items-center gap-3 p-4 text-left transition hover:bg-slate-50 sm:p-5"
-                              >
-                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-sm font-bold text-blue-700">
-                                  {moduleIndex + 1}
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-sm font-bold text-slate-500">
+                                {index + 1}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="font-semibold text-slate-900">
+                                  {lesson.title}
+                                </p>
+                                <p className="mt-1 text-xs text-slate-500">
+                                  {lesson.module_title}
+                                  {lesson.duration_minutes
+                                    ? ` · ${lesson.duration_minutes} min`
+                                    : ""}
+                                </p>
+                              </div>
+                              {attached ? (
+                                <Link
+                                  href={`/student/videos/${attached.id}`}
+                                  className="btn-secondary shrink-0"
+                                >
+                                  Open lesson{" "}
+                                  <ArrowRight className="ml-2 h-4 w-4" />
+                                </Link>
+                              ) : (
+                                <span className="text-xs font-medium text-slate-400">
+                                  No video attached
                                 </span>
-                                <span className="min-w-0 flex-1">
-                                  <span className="block font-bold text-slate-900">
-                                    {module.title}
-                                  </span>
-                                  <span className="mt-1 block text-xs text-slate-500">
-                                    {moduleLessons.length}{" "}
-                                    {moduleLessons.length === 1
-                                      ? "lesson"
-                                      : "lessons"}
-                                    {moduleMinutes
-                                      ? ` · ${moduleMinutes} min`
-                                      : ""}
-                                  </span>
-                                </span>
-                                {expanded ? (
-                                  <ChevronUp className="h-5 w-5 text-slate-500" />
-                                ) : (
-                                  <ChevronDown className="h-5 w-5 text-slate-500" />
-                                )}
-                              </button>
-                              {expanded ? (
-                                <div className="space-y-2 border-t border-slate-100 p-3 sm:p-4">
-                                  {moduleLessons.length === 0 ? (
-                                    <p className="px-3 py-4 text-sm text-slate-500">
-                                      Lessons for this module have not been
-                                      added yet.
-                                    </p>
-                                  ) : (
-                                    moduleLessons.map((lesson, lessonIndex) => {
-                                      const attached = videos.find(
-                                        (video) =>
-                                          Number(video.lesson_id) ===
-                                          Number(lesson.id),
-                                      );
-                                      return (
-                                        <div
-                                          key={lesson.id}
-                                          className="flex flex-col gap-3 rounded-xl p-3 transition hover:bg-slate-50 sm:flex-row sm:items-center"
-                                        >
-                                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-bold text-slate-600">
-                                            {lessonIndex + 1}
-                                          </span>
-                                          <div className="min-w-0 flex-1">
-                                            <p className="font-semibold text-slate-900">
-                                              {lesson.title}
-                                            </p>
-                                            <p className="mt-1 text-xs text-slate-500">
-                                              {lesson.duration_minutes
-                                                ? `${lesson.duration_minutes} min`
-                                                : "Lesson"}
-                                              {attached
-                                                ? " · Video available"
-                                                : " · Video not attached"}
-                                            </p>
-                                          </div>
-                                          {attached ? (
-                                            <Link
-                                              href={`/student/videos/${attached.id}`}
-                                              className="btn-secondary shrink-0"
-                                            >
-                                              Open lesson{" "}
-                                              <ArrowRight className="ml-2 h-4 w-4" />
-                                            </Link>
-                                          ) : null}
-                                        </div>
-                                      );
-                                    })
-                                  )}
-                                </div>
-                              ) : null}
+                              )}
                             </div>
                           );
                         })
