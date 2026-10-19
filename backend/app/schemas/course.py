@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Dict
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.course import CourseStatus, EnrollmentStatus
@@ -16,6 +16,15 @@ class CourseBase(BaseModel):
     thumbnail_url: Optional[str] = Field(default=None, max_length=500)
     is_free: bool = True
     price_cents: int = Field(default=0, ge=0)
+    price_currency: str = Field(default="INR", pattern="^(INR|USD)$", max_length=3)
+    learning_outcomes: List[str] = Field(default_factory=list)
+    skills: List[str] = Field(default_factory=list)
+    requirements: List[str] = Field(default_factory=list)
+    projects: List[str] = Field(default_factory=list)
+    learning_path: List[str] = Field(default_factory=list)
+    ai_features: List[str] = Field(default_factory=list)
+    included_features: List[str] = Field(default_factory=list)
+    faqs: List[Dict[str, str]] = Field(default_factory=list)
     duration_minutes: Optional[int] = Field(default=None, ge=0)
 
 
@@ -33,6 +42,15 @@ class CourseUpdate(BaseModel):
     thumbnail_url: Optional[str] = Field(default=None, max_length=500)
     is_free: Optional[bool] = None
     price_cents: Optional[int] = Field(default=None, ge=0)
+    price_currency: Optional[str] = Field(default=None, pattern="^(INR|USD)$", max_length=3)
+    learning_outcomes: Optional[List[str]] = None
+    skills: Optional[List[str]] = None
+    requirements: Optional[List[str]] = None
+    projects: Optional[List[str]] = None
+    learning_path: Optional[List[str]] = None
+    ai_features: Optional[List[str]] = None
+    included_features: Optional[List[str]] = None
+    faqs: Optional[List[Dict[str, str]]] = None
     duration_minutes: Optional[int] = Field(default=None, ge=0)
 
 
@@ -50,6 +68,15 @@ class CourseListItem(BaseModel):
     status: CourseStatus
     is_free: bool
     price_cents: int
+    price_currency: str = "INR"
+    learning_outcomes: Optional[List[str]] = None
+    skills: Optional[List[str]] = None
+    requirements: Optional[List[str]] = None
+    projects: Optional[List[str]] = None
+    learning_path: Optional[List[str]] = None
+    ai_features: Optional[List[str]] = None
+    included_features: Optional[List[str]] = None
+    faqs: Optional[List[Dict[str, str]]] = None
     duration_minutes: Optional[int] = None
     created_at: datetime
     teacher_id: Optional[int] = None

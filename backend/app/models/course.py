@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, List
 from sqlalchemy import (
-    BigInteger, String, Boolean, DateTime, Enum, ForeignKey, Text, Integer, Float, UniqueConstraint, Index,
+    BigInteger, String, Boolean, DateTime, Enum, ForeignKey, Text, Integer, Float, JSON, UniqueConstraint, Index,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
@@ -47,6 +47,15 @@ class Course(Base, TimestampMixin):
     )
     is_free: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     price_cents: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    price_currency: Mapped[str] = mapped_column(String(3), default="INR", nullable=False)
+    learning_outcomes: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
+    skills: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
+    requirements: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
+    projects: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
+    learning_path: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
+    ai_features: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
+    included_features: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
+    faqs: Mapped[Optional[list[dict[str, str]]]] = mapped_column(JSON, nullable=True)
     duration_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     published_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     archived_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

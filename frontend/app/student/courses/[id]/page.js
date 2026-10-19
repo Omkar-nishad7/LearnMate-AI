@@ -10,8 +10,8 @@ import {
   CirclePlay,
   ClipboardList,
   Clock3,
-  LockKeyhole,
   UserRound,
+  Layers3,
 } from "lucide-react";
 import Sidebar from "@/components/layout/Sidebar";
 import Navbar from "@/components/layout/Navbar";
@@ -34,6 +34,16 @@ function errorMessage(error, fallback) {
     return detail.message || detail.detail || detail.error || fallback;
   }
   return error?.message || detail || fallback;
+}
+
+function coursePriceLabel(course) {
+  if (course?.is_free || !Number(course?.price_cents)) return "Free";
+  const currency = course?.price_currency === "USD" ? "USD" : "INR";
+  return new Intl.NumberFormat(currency === "INR" ? "en-IN" : "en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2,
+  }).format(Number(course.price_cents) / 100);
 }
 
 function StatusPill({ attempted }) {
@@ -203,42 +213,115 @@ export default function StudentCourseDetailPage() {
                   <p className="mt-4 text-sm text-slate-500">Loading course…</p>
                 </Card>
               ) : course ? (
-                <section className="overflow-hidden rounded-3xl bg-slate-950 p-6 shadow-xl sm:p-8">
-                  <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-                    <div className="max-w-3xl">
-                      <div className="flex flex-wrap gap-2 text-xs font-bold">
-                        <span className="rounded-full bg-blue-500/15 px-3 py-1 text-blue-200">
-                          {course.category || "General"}
-                        </span>
-                        <span className="rounded-full bg-white/10 px-3 py-1 text-slate-200">
-                          {course.difficulty || "All levels"}
-                        </span>
-                        <span className="rounded-full bg-white/10 px-3 py-1 text-slate-200">
-                          {course.language || "English"}
-                        </span>
+                <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_310px]">
+                  <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                    <div className="grid md:grid-cols-[minmax(240px,0.78fr)_minmax(0,1.22fr)]">
+                      <div className="min-h-52 bg-gradient-to-br from-indigo-100 via-blue-50 to-violet-100 md:min-h-[300px]">
+                        {course.thumbnail_url ? (
+                          <img
+                            src={course.thumbnail_url}
+                            alt={`${course.title} course cover`}
+                            className="h-full min-h-52 w-full object-cover md:min-h-[300px]"
+                            onError={(event) => {
+                              event.currentTarget.style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          <div className="flex h-full min-h-52 items-center justify-center p-8 md:min-h-[300px]">
+                            <BookOpen className="h-16 w-16 text-indigo-500/80" />
+                          </div>
+                        )}
                       </div>
-                      <h1 className="mt-4 text-3xl font-black tracking-tight text-white sm:text-4xl">
-                        {course.title}
-                      </h1>
-                      <p className="mt-3 text-sm leading-6 text-slate-300 sm:text-base">
-                        {course.short_description ||
-                          course.description ||
-                          "Continue learning from your course content."}
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 sm:min-w-64">
-                      <div className="rounded-2xl bg-white/10 p-4 text-white backdrop-blur">
-                        <p className="text-2xl font-black">{lessons.length}</p>
-                        <p className="text-xs text-slate-300">Lessons</p>
-                      </div>
-                      <div className="rounded-2xl bg-white/10 p-4 text-white backdrop-blur">
-                        <p className="text-2xl font-black">
-                          {assignments.length}
+                      <div className="p-5 sm:p-7">
+                        <div className="flex flex-wrap gap-2 text-xs font-bold">
+                          <span className="rounded-full bg-indigo-50 px-3 py-1 text-indigo-700">
+                            {course.category || "General"}
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-3 py-1 capitalize text-slate-700">
+                            {course.difficulty || "All levels"}
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
+                            {String(course.language || "en").toUpperCase()}
+                          </span>
+                        </div>
+                        <h1 className="mt-4 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+                          {course.title}
+                        </h1>
+                        <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
+                          {course.short_description ||
+                            course.description ||
+                            "Explore the course content and learning path."}
                         </p>
-                        <p className="text-xs text-slate-300">Assignments</p>
+                        <div className="mt-5 flex flex-wrap gap-4 text-xs font-semibold text-slate-500">
+                          <span className="inline-flex items-center gap-1.5">
+                            <BookOpen className="h-4 w-4 text-indigo-600" />
+                            {lessons.length} lessons
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <Layers3 className="h-4 w-4 text-indigo-600" />
+                            {(course.modules || []).length} modules
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <Clock3 className="h-4 w-4 text-indigo-600" />
+                            {course.duration_minutes
+                              ? `${course.duration_minutes} min`
+                              : "Self-paced"}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
+                  <aside className="h-fit rounded-3xl border border-slate-200 bg-white p-5 shadow-sm xl:sticky xl:top-24">
+                    <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                      Course access
+                    </p>
+                    <p className="mt-2 text-3xl font-black tracking-tight text-slate-900">
+                      {coursePriceLabel(course)}
+                    </p>
+                    <p className="mt-2 text-xs leading-5 text-slate-500">
+                      {course.is_free
+                        ? "Free access to this course"
+                        : "Demo purchase · no payment is collected"}
+                    </p>
+                    {enrolled ? (
+                      <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-center text-sm font-semibold text-emerald-700">
+                        <CheckCircle2 className="mr-1 inline h-4 w-4" />
+                        You’re enrolled
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={enrolling}
+                        onClick={enroll}
+                        className="btn-primary mt-5 w-full justify-center disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {enrolling
+                          ? "Enrolling…"
+                          : course.is_free
+                            ? "Enroll Now"
+                            : "Buy Now · Demo"}
+                      </button>
+                    )}
+                    <p className="mt-3 text-center text-[11px] text-slate-500">
+                      {course.is_free
+                        ? "No fee required"
+                        : "Demo mode: clicking Buy Now enrolls you without charging"}
+                    </p>
+                    <div className="mt-5 space-y-3 border-t border-slate-100 pt-4 text-xs text-slate-600">
+                      <p className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        Access to course lessons
+                      </p>
+                      <p className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        Course assignments and progress
+                      </p>
+                      <p className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        Learning at your own pace
+                      </p>
+                    </div>
+                  </aside>
                 </section>
               ) : null}
 
@@ -251,6 +334,224 @@ export default function StudentCourseDetailPage() {
                   >
                     Retry
                   </button>
+                </div>
+              ) : null}
+
+              {!loading && course ? (
+                <div className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,0.8fr)]">
+                  <div className="space-y-5">
+                    <Card className="border-0 p-5 shadow-sm sm:p-6">
+                      <h2 className="text-lg font-bold text-slate-900">
+                        About this course
+                      </h2>
+                      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">
+                        {course.description ||
+                          course.short_description ||
+                          "The teacher has not added a detailed description yet."}
+                      </p>
+                    </Card>
+                    {Array.isArray(course.learning_outcomes) &&
+                    course.learning_outcomes.length ? (
+                      <Card className="border-0 p-5 shadow-sm sm:p-6">
+                        <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
+                          <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                          What you’ll learn
+                        </h2>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          {course.learning_outcomes.map((item, index) => (
+                            <p
+                              key={`${item}-${index}`}
+                              className="flex gap-2 text-sm leading-5 text-slate-700"
+                            >
+                              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                              {item}
+                            </p>
+                          ))}
+                        </div>
+                      </Card>
+                    ) : null}
+                    <Card className="border-0 p-5 shadow-sm sm:p-6">
+                      <h2 className="text-lg font-bold text-slate-900">
+                        Course curriculum
+                      </h2>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {(course.modules || []).length} modules ·{" "}
+                        {lessons.length} lessons
+                      </p>
+                      {(course.modules || []).length ? (
+                        <div className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200">
+                          {course.modules.map((module, moduleIndex) => (
+                            <details
+                              key={
+                                module.id || `${module.title}-${moduleIndex}`
+                              }
+                              className="p-4"
+                              open={moduleIndex === 0}
+                            >
+                              <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+                                Module {moduleIndex + 1}: {module.title}
+                                <span className="ml-2 text-xs font-normal text-slate-500">
+                                  {(module.lessons || []).length} lessons
+                                </span>
+                              </summary>
+                              <ul className="mt-3 space-y-2 pl-5">
+                                {(module.lessons || []).map(
+                                  (lesson, lessonIndex) => (
+                                    <li
+                                      key={
+                                        lesson.id ||
+                                        `${lesson.title}-${lessonIndex}`
+                                      }
+                                      className="list-disc text-sm text-slate-600"
+                                    >
+                                      {lesson.title}
+                                    </li>
+                                  ),
+                                )}
+                              </ul>
+                            </details>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-3 text-sm text-slate-500">
+                          The teacher has not added the curriculum yet.
+                        </p>
+                      )}
+                    </Card>
+                    {Array.isArray(course.learning_path) &&
+                    course.learning_path.length ? (
+                      <Card className="border-0 p-5 shadow-sm sm:p-6">
+                        <h2 className="text-lg font-bold text-slate-900">
+                          Learning path
+                        </h2>
+                        <p className="mt-1 text-xs text-slate-500">
+                          A structured roadmap from foundations to practice.
+                        </p>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          {course.learning_path.map((item, index) => (
+                            <div
+                              key={`${item}-${index}`}
+                              className="flex items-start gap-3 rounded-xl border border-slate-100 p-3"
+                            >
+                              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xs font-bold text-indigo-700">
+                                {index + 1}
+                              </span>
+                              <p className="pt-1 text-sm font-medium text-slate-700">
+                                {item}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </Card>
+                    ) : null}
+                    {Array.isArray(course.projects) &&
+                    course.projects.length ? (
+                      <Card className="border-0 p-5 shadow-sm sm:p-6">
+                        <h2 className="text-lg font-bold text-slate-900">
+                          Projects you’ll build
+                        </h2>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          {course.projects.map((item, index) => (
+                            <div
+                              key={`${item}-${index}`}
+                              className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm font-medium text-slate-700"
+                            >
+                              {item}
+                            </div>
+                          ))}
+                        </div>
+                      </Card>
+                    ) : null}
+                    {Array.isArray(course.ai_features) &&
+                    course.ai_features.length ? (
+                      <Card className="border-0 p-5 shadow-sm sm:p-6">
+                        <h2 className="text-lg font-bold text-slate-900">
+                          AI learning features
+                        </h2>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {course.ai_features.map((item, index) => (
+                            <div
+                              key={`${item}-${index}`}
+                              className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 text-sm font-medium text-indigo-800"
+                            >
+                              {item}
+                            </div>
+                          ))}
+                        </div>
+                      </Card>
+                    ) : null}
+                    {Array.isArray(course.faqs) && course.faqs.length ? (
+                      <Card className="border-0 p-5 shadow-sm sm:p-6">
+                        <h2 className="text-lg font-bold text-slate-900">
+                          Frequently asked questions
+                        </h2>
+                        {course.faqs.map((faq, index) => (
+                          <details
+                            key={`${faq.question}-${index}`}
+                            className="border-b border-slate-100 py-3 last:border-0"
+                          >
+                            <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+                              {faq.question}
+                            </summary>
+                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">
+                              {faq.answer}
+                            </p>
+                          </details>
+                        ))}
+                      </Card>
+                    ) : null}
+                  </div>
+                  <div className="space-y-5">
+                    {Array.isArray(course.included_features) &&
+                    course.included_features.length ? (
+                      <Card className="border-0 p-5 shadow-sm">
+                        <h2 className="font-bold text-slate-900">
+                          What’s included
+                        </h2>
+                        <div className="mt-3 space-y-2">
+                          {course.included_features.map((item, index) => (
+                            <p
+                              key={`${item}-${index}`}
+                              className="flex gap-2 text-sm text-slate-600"
+                            >
+                              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                              {item}
+                            </p>
+                          ))}
+                        </div>
+                      </Card>
+                    ) : null}
+                    {Array.isArray(course.skills) && course.skills.length ? (
+                      <Card className="border-0 p-5 shadow-sm">
+                        <h2 className="font-bold text-slate-900">
+                          Skills you’ll gain
+                        </h2>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {course.skills.map((item, index) => (
+                            <span
+                              key={`${item}-${index}`}
+                              className="rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700"
+                            >
+                              {item}
+                            </span>
+                          ))}
+                        </div>
+                      </Card>
+                    ) : null}
+                    {Array.isArray(course.requirements) &&
+                    course.requirements.length ? (
+                      <Card className="border-0 p-5 shadow-sm">
+                        <h2 className="font-bold text-slate-900">
+                          Requirements
+                        </h2>
+                        <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-600">
+                          {course.requirements.map((item, index) => (
+                            <li key={`${item}-${index}`}>{item}</li>
+                          ))}
+                        </ul>
+                      </Card>
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
 
@@ -290,46 +591,6 @@ export default function StudentCourseDetailPage() {
                       View Teacher Profile{" "}
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Link>
-                  </div>
-                </Card>
-              ) : null}
-
-              {!loading && course && !enrolled ? (
-                <Card className="border-0 p-6 shadow-sm sm:p-8">
-                  <div className="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-center">
-                    <div>
-                      <div className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
-                        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                        Demo checkout
-                      </div>
-                      <h2 className="mt-3 text-xl font-bold text-slate-900">
-                        Get full access to this course
-                      </h2>
-                      <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                        This is a demo purchase flow. No payment will be collected; selecting Buy Now enrolls you in the course and unlocks its available learning content.
-                      </p>
-                    </div>
-                    <div className="min-w-56 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-center">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Course price
-                      </p>
-                      <p className="mt-1 text-3xl font-black tracking-tight text-slate-900">
-                        {course.is_free || !Number(course.price_cents)
-                          ? "Free"
-                          : `₹${(Number(course.price_cents) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                      </p>
-                      <button
-                        type="button"
-                        disabled={enrolling}
-                        onClick={enroll}
-                        className="btn-primary mt-4 w-full justify-center disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {enrolling ? "Enrolling…" : "Buy Now · Demo"}
-                      </button>
-                      <p className="mt-2 text-[11px] text-slate-500">
-                        No real payment required
-                      </p>
-                    </div>
                   </div>
                 </Card>
               ) : null}

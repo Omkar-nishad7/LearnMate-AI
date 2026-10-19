@@ -32,6 +32,7 @@ import {
   publishCourse,
 } from "@/services/courses";
 import { fetchMyUser } from "@/services/users";
+import CoursePreviewModal from "@/components/course/CoursePreviewModal";
 
 const STEPS = [
   "Basic Details",
@@ -50,6 +51,42 @@ const CATEGORIES = [
 ];
 const inputClass =
   "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100";
+
+function parseLineList(value) {
+  return String(value || "")
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseFaqList(value) {
+  return String(value || "")
+    .split("\n")
+    .map((line) => {
+      const separator = line.indexOf("|");
+      if (separator < 0) return null;
+      const question = line.slice(0, separator).trim();
+      const answer = line.slice(separator + 1).trim();
+      return question && answer ? { question, answer } : null;
+    })
+    .filter(Boolean);
+}
+
+function faqText(value) {
+  return (Array.isArray(value) ? value : [])
+    .map((item) => `${item?.question || ""} | ${item?.answer || ""}`)
+    .join("\n");
+}
+
+function priceText(cents, currency = "INR", isFree = false) {
+  if (isFree || !Number(cents)) return "Free";
+  const code = currency === "USD" ? "USD" : "INR";
+  return new Intl.NumberFormat(code === "INR" ? "en-IN" : "en-US", {
+    style: "currency",
+    currency: code,
+    maximumFractionDigits: 2,
+  }).format(Number(cents) / 100);
+}
 
 function errorMessage(error, fallback) {
   if (error?.status === 403)
@@ -80,6 +117,7 @@ export default function NewCoursePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [showHelp, setShowHelp] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [form, setForm] = useState({
     title: "",
     short_description: "",
@@ -89,7 +127,16 @@ export default function NewCoursePage() {
     language: "en",
     thumbnail_url: "",
     is_free: true,
-    price_cents: 0,
+    price_amount: "",
+    price_currency: "INR",
+    learning_outcomes: "",
+    skills: "",
+    requirements: "",
+    projects: "",
+    learning_path: "",
+    ai_features: "",
+    included_features: "",
+    faqs: "",
     duration_minutes: 0,
   });
   const [modules, setModules] = useState([{ id: 1, title: "", lessons: [""] }]);
@@ -203,12 +250,28 @@ export default function NewCoursePage() {
   async function submit(event) {
     event.preventDefault();
     if (busy) return;
+    if (!form.is_free && Number(form.price_amount || 0) <= 0) {
+      setStep(2);
+      setError(
+        "Enter a course price greater than zero, or choose Free course.",
+      );
+      return;
+    }
     setBusy(true);
     setError("");
     let createdCourse = null;
     try {
+      const { price_amount, ...formData } = form;
       createdCourse = await createCourse({
-        ...form,
+        ...formData,
+        learning_outcomes: parseLineList(form.learning_outcomes),
+        skills: parseLineList(form.skills),
+        requirements: parseLineList(form.requirements),
+        projects: parseLineList(form.projects),
+        learning_path: parseLineList(form.learning_path),
+        ai_features: parseLineList(form.ai_features),
+        included_features: parseLineList(form.included_features),
+        faqs: parseFaqList(form.faqs),
         title: form.title.trim(),
         short_description: form.short_description.trim() || null,
         description: form.description.trim(),
@@ -217,7 +280,7 @@ export default function NewCoursePage() {
         thumbnail_url: form.thumbnail_url.trim() || null,
         price_cents: form.is_free
           ? 0
-          : Math.max(0, Number(form.price_cents || 0)),
+          : Math.max(0, Math.round(Number(price_amount || 0) * 100)),
         duration_minutes:
           Math.max(0, Number(form.duration_minutes || 0)) || null,
       });
@@ -285,13 +348,22 @@ export default function NewCoursePage() {
                     and resources.
                   </p>
                 </div>
-                <Link
-                  href="/teacher/courses"
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 shadow-sm hover:bg-slate-50"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  Back to Courses
-                </Link>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-white px-4 py-2.5 text-sm font-semibold text-indigo-700 shadow-sm hover:bg-indigo-50"
+                  >
+                    <Eye className="h-4 w-4" /> Preview student page
+                  </button>
+                  <Link
+                    href="/teacher/courses"
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 shadow-sm hover:bg-slate-50"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Back to Courses
+                  </Link>
+                </div>
               </div>
 
               {error ? (
@@ -386,12 +458,12 @@ export default function NewCoursePage() {
                             <Field
                               label="Course Description"
                               required
-                              hint={`${form.description.length}/500 characters`}
+                              hint={`${form.description.length} characters`}
                             >
                               <textarea
                                 className={`${inputClass} min-h-32 resize-y`}
                                 required
-                                maxLength={500}
+                                maxLength={10000}
                                 value={form.description}
                                 onChange={(e) =>
                                   updateField("description", e.target.value)
@@ -502,6 +574,87 @@ export default function NewCoursePage() {
                               </div>
                             </Field>
                           </div>
+                          <section className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4 sm:p-5">
+                            <div className="mb-4">
+                              <h3 className="font-bold text-slate-900">
+                                Student-facing course page
+                              </h3>
+                              <p className="mt-1 text-xs leading-5 text-slate-500">
+                                Each item appears on the student course details
+                                page. Enter one item per line; FAQ rows use
+                                Question | Answer.
+                              </p>
+                            </div>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              {[
+                                [
+                                  "learning_outcomes",
+                                  "What students will learn",
+                                  "Build production-ready apps\nUnderstand core concepts\nComplete practical exercises",
+                                ],
+                                [
+                                  "skills",
+                                  "Skills you’ll gain",
+                                  "Python\nPrompt engineering\nRAG",
+                                ],
+                                [
+                                  "requirements",
+                                  "Requirements",
+                                  "Basic computer knowledge\nInternet access",
+                                ],
+                                [
+                                  "projects",
+                                  "Projects students will build",
+                                  "AI chatbot\nDocument search assistant",
+                                ],
+                                [
+                                  "learning_path",
+                                  "Learning path",
+                                  "Foundations\nCore concepts\nHands-on project",
+                                ],
+                                [
+                                  "ai_features",
+                                  "AI learning features",
+                                  "AI tutor support\nPractice quiz generation",
+                                ],
+                                [
+                                  "included_features",
+                                  "What’s included",
+                                  "Course lessons\nPractice resources\nProject files",
+                                ],
+                              ].map(([key, label, placeholder]) => (
+                                <Field
+                                  key={key}
+                                  label={label}
+                                  hint="One item per line"
+                                >
+                                  <textarea
+                                    className={`${inputClass} min-h-28 resize-y`}
+                                    value={form[key]}
+                                    onChange={(e) =>
+                                      updateField(key, e.target.value)
+                                    }
+                                    placeholder={placeholder}
+                                  />
+                                </Field>
+                              ))}
+                              <div className="md:col-span-2">
+                                <Field
+                                  label="Frequently asked questions"
+                                  hint="One FAQ per line, formatted as: Question | Answer"
+                                >
+                                  <textarea
+                                    className={`${inputClass} min-h-24 resize-y`}
+                                    value={form.faqs}
+                                    onChange={(e) =>
+                                      updateField("faqs", e.target.value)
+                                    }
+                                    placeholder="Do I need prior experience? | No, the course starts with the basics."
+                                  />
+                                </Field>
+                              </div>
+                            </div>
+                          </section>
                         </div>
                       ) : null}
 
@@ -655,20 +808,47 @@ export default function NewCoursePage() {
                               </button>
                             </div>
                             {!form.is_free ? (
-                              <div className="mt-4 max-w-xs">
+                              <div className="mt-4 grid max-w-xl gap-4 sm:grid-cols-2">
                                 <Field
-                                  label="Price (cents)"
+                                  label="Currency"
                                   required
-                                  hint="For example, 999 = 9.99 in the configured currency."
+                                  hint="Shown on the student page"
+                                >
+                                  <select
+                                    className={inputClass}
+                                    value={form.price_currency}
+                                    onChange={(e) =>
+                                      updateField(
+                                        "price_currency",
+                                        e.target.value,
+                                      )
+                                    }
+                                  >
+                                    <option value="INR">
+                                      INR — Indian Rupee (₹)
+                                    </option>
+                                    <option value="USD">
+                                      USD — US Dollar ($)
+                                    </option>
+                                  </select>
+                                </Field>
+                                <Field
+                                  label={`Course price (${form.price_currency === "USD" ? "$" : "₹"})`}
+                                  required
+                                  hint="Enter the amount students see"
                                 >
                                   <input
                                     className={inputClass}
                                     type="number"
-                                    min="1"
+                                    min="0.01"
+                                    step="0.01"
                                     required
-                                    value={form.price_cents}
+                                    value={form.price_amount}
                                     onChange={(e) =>
-                                      updateField("price_cents", e.target.value)
+                                      updateField(
+                                        "price_amount",
+                                        e.target.value,
+                                      )
                                     }
                                   />
                                 </Field>
@@ -768,7 +948,12 @@ export default function NewCoursePage() {
                                 "Price",
                                 form.is_free
                                   ? "Free"
-                                  : `${form.price_cents} cents`,
+                                  : priceText(
+                                      Math.round(
+                                        Number(form.price_amount || 0) * 100,
+                                      ),
+                                      form.price_currency,
+                                    ),
                               ],
                               [
                                 "Course outline",
@@ -1002,6 +1187,28 @@ export default function NewCoursePage() {
           </main>
         </div>
       </div>
+      {previewOpen ? (
+        <CoursePreviewModal
+          course={{
+            ...form,
+            price_cents: Math.round(Number(form.price_amount || 0) * 100),
+            learning_outcomes: parseLineList(form.learning_outcomes),
+            skills: parseLineList(form.skills),
+            requirements: parseLineList(form.requirements),
+            projects: parseLineList(form.projects),
+            learning_path: parseLineList(form.learning_path),
+            ai_features: parseLineList(form.ai_features),
+            included_features: parseLineList(form.included_features),
+            faqs: parseFaqList(form.faqs),
+          }}
+          modules={modules.map((module) => ({
+            ...module,
+            lessons: module.lessons.filter((lesson) => lesson.trim()),
+          }))}
+          instructor={user}
+          onClose={() => setPreviewOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -23,6 +23,7 @@ import Sidebar from "@/components/layout/Sidebar";
 import Navbar from "@/components/layout/Navbar";
 import { fetchTeacherCourseById, updateCourse } from "@/services/courses";
 import { fetchMyUser } from "@/services/users";
+import CoursePreviewModal from "@/components/course/CoursePreviewModal";
 
 function errorMessage(error, fallback) {
   const detail = error?.data?.detail;
@@ -35,6 +36,42 @@ const inputClass =
   "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50";
 const labelClass = "mb-2 block text-xs font-semibold text-slate-600";
 
+function parseLineList(value) {
+  return String(value || "")
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseFaqList(value) {
+  return String(value || "")
+    .split("\n")
+    .map((line) => {
+      const separator = line.indexOf("|");
+      if (separator < 0) return null;
+      const question = line.slice(0, separator).trim();
+      const answer = line.slice(separator + 1).trim();
+      return question && answer ? { question, answer } : null;
+    })
+    .filter(Boolean);
+}
+
+function faqText(value) {
+  return (Array.isArray(value) ? value : [])
+    .map((item) => `${item?.question || ""} | ${item?.answer || ""}`)
+    .join("\n");
+}
+
+function priceText(cents, currency = "INR", isFree = false) {
+  if (isFree || !Number(cents)) return "Free";
+  const code = currency === "USD" ? "USD" : "INR";
+  return new Intl.NumberFormat(code === "INR" ? "en-IN" : "en-US", {
+    style: "currency",
+    currency: code,
+    maximumFractionDigits: 2,
+  }).format(Number(cents) / 100);
+}
+
 export default function EditCoursePage() {
   const { id } = useParams();
   const router = useRouter();
@@ -45,6 +82,7 @@ export default function EditCoursePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -64,6 +102,16 @@ export default function EditCoursePage() {
           thumbnail_url: data.thumbnail_url || "",
           is_free: data.is_free !== false,
           price_cents: data.price_cents || 0,
+          price_amount: (Number(data.price_cents || 0) / 100).toFixed(2),
+          price_currency: data.price_currency === "USD" ? "USD" : "INR",
+          learning_outcomes: (data.learning_outcomes || []).join("\n"),
+          skills: (data.skills || []).join("\n"),
+          requirements: (data.requirements || []).join("\n"),
+          projects: (data.projects || []).join("\n"),
+          learning_path: (data.learning_path || []).join("\n"),
+          ai_features: (data.ai_features || []).join("\n"),
+          included_features: (data.included_features || []).join("\n"),
+          faqs: faqText(data.faqs || []),
           duration_minutes: data.duration_minutes || 0,
         });
       })
@@ -87,13 +135,32 @@ export default function EditCoursePage() {
   async function submit(event) {
     event.preventDefault();
     if (!form || saving) return;
+    if (!form.is_free && Number(form.price_amount || 0) <= 0) {
+      setError(
+        "Enter a course price greater than zero, or mark the course as free.",
+      );
+      setSuccess("");
+      return;
+    }
     setSaving(true);
     setError("");
     setSuccess("");
     try {
+      const { price_amount, ...formData } = form;
       const updated = await updateCourse(id, {
-        ...form,
-        price_cents: Number(form.price_cents || 0),
+        ...formData,
+        learning_outcomes: parseLineList(form.learning_outcomes),
+        skills: parseLineList(form.skills),
+        requirements: parseLineList(form.requirements),
+        projects: parseLineList(form.projects),
+        learning_path: parseLineList(form.learning_path),
+        ai_features: parseLineList(form.ai_features),
+        included_features: parseLineList(form.included_features),
+        faqs: parseFaqList(form.faqs),
+        price_cents: form.is_free
+          ? 0
+          : Math.max(0, Math.round(Number(price_amount || 0) * 100)),
+        price_currency: form.price_currency === "USD" ? "USD" : "INR",
         duration_minutes: Number(form.duration_minutes || 0) || null,
         thumbnail_url: form.thumbnail_url.trim() || null,
       });
@@ -140,13 +207,14 @@ export default function EditCoursePage() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Link
-                    href={`/teacher/courses/${id}`}
+                  <button
+                    type="button"
+                    onClick={() => setPreviewOpen(true)}
                     className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
                   >
                     <Eye className="h-4 w-4" />
-                    Preview Course
-                  </Link>
+                    Preview Student Page
+                  </button>
                   <button
                     type="submit"
                     form="edit-course-form"
@@ -354,6 +422,89 @@ export default function EditCoursePage() {
 
                     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
                       <div className="mb-5 flex items-center gap-3">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
+                          <Sparkles className="h-5 w-5" />
+                        </span>
+                        <div>
+                          <h2 className="font-bold text-slate-900">
+                            Student-facing details
+                          </h2>
+                          <p className="mt-1 text-xs text-slate-500">
+                            These editable details appear on the student course
+                            page. Use one item per line; FAQ lines use Question
+                            | Answer.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {[
+                          [
+                            "learning_outcomes",
+                            "What students will learn",
+                            "Add one learning outcome per line",
+                          ],
+                          [
+                            "skills",
+                            "Skills you’ll gain",
+                            "Python\nPrompt engineering\nRAG",
+                          ],
+                          [
+                            "requirements",
+                            "Requirements",
+                            "Prerequisites and tools students need",
+                          ],
+                          [
+                            "projects",
+                            "Projects students will build",
+                            "AI chatbot\nSearch assistant",
+                          ],
+                          [
+                            "learning_path",
+                            "Learning path",
+                            "Foundations\nCore concepts\nHands-on project",
+                          ],
+                          [
+                            "ai_features",
+                            "AI learning features",
+                            "AI tutor support\nPractice quiz generation",
+                          ],
+                          [
+                            "included_features",
+                            "What’s included",
+                            "Course lessons\nPractice resources\nProject files",
+                          ],
+                        ].map(([key, label, placeholder]) => (
+                          <div key={key}>
+                            <label className={labelClass}>{label}</label>
+                            <textarea
+                              rows={4}
+                              value={form[key] || ""}
+                              onChange={(e) => setField(key, e.target.value)}
+                              className={`${inputClass} resize-y leading-6`}
+                              placeholder={placeholder}
+                            />
+                          </div>
+                        ))}
+                        <div className="md:col-span-2">
+                          <label className={labelClass}>
+                            Frequently asked questions
+                          </label>
+                          <textarea
+                            rows={3}
+                            value={form.faqs || ""}
+                            onChange={(e) => setField("faqs", e.target.value)}
+                            className={`${inputClass} resize-y leading-6`}
+                            placeholder="Do I need prior experience? | No, the course starts with the basics."
+                          />
+                          <p className="mt-1.5 text-xs text-slate-400">
+                            One FAQ per line in Question | Answer format.
+                          </p>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                      <div className="mb-5 flex items-center gap-3">
                         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
                           <Layers3 className="h-5 w-5" />
                         </span>
@@ -474,11 +625,27 @@ export default function EditCoursePage() {
                         <Sparkles className="h-4 w-4 text-indigo-600" />
                         What students will learn
                       </h2>
-                      <p className="text-sm leading-6 text-slate-600">
-                        {form.description ||
-                          form.short_description ||
-                          "Add a course description to explain the skills and concepts students will learn."}
-                      </p>
+                      {parseLineList(form.learning_outcomes).length ? (
+                        <ul className="space-y-2">
+                          {parseLineList(form.learning_outcomes)
+                            .slice(0, 4)
+                            .map((item, index) => (
+                              <li
+                                key={`${item}-${index}`}
+                                className="flex gap-2 text-sm leading-5 text-slate-600"
+                              >
+                                <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                                {item}
+                              </li>
+                            ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm leading-6 text-slate-600">
+                          {form.description ||
+                            form.short_description ||
+                            "Add learning outcomes in the editor to preview them here."}
+                        </p>
+                      )}
                     </section>
 
                     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -494,7 +661,7 @@ export default function EditCoursePage() {
                           <span className="mt-1 block text-xs text-slate-500">
                             {form.is_free
                               ? "Free for students"
-                              : `Price: ${(Number(form.price_cents || 0) / 100).toFixed(2)}`}
+                              : `Price: ${priceText(Math.round(Number(form.price_amount || 0) * 100), form.price_currency)}`}
                           </span>
                         </span>
                         <input
@@ -506,18 +673,39 @@ export default function EditCoursePage() {
                           className="h-4 w-4 accent-indigo-600"
                         />
                       </label>
+                      <div className="mt-3">
+                        <label className={labelClass}>Currency</label>
+                        <select
+                          value={form.price_currency || "INR"}
+                          onChange={(e) =>
+                            setField("price_currency", e.target.value)
+                          }
+                          className={inputClass}
+                        >
+                          <option value="INR">INR — Indian Rupee (₹)</option>
+                          <option value="USD">USD — US Dollar ($)</option>
+                        </select>
+                      </div>
                       {!form.is_free ? (
                         <div className="mt-3">
-                          <label className={labelClass}>Price (in cents)</label>
+                          <label className={labelClass}>
+                            Course price (
+                            {form.price_currency === "USD" ? "$" : "₹"})
+                          </label>
                           <input
                             type="number"
-                            min="0"
-                            value={form.price_cents}
+                            min="0.01"
+                            step="0.01"
+                            value={form.price_amount}
                             onChange={(e) =>
-                              setField("price_cents", e.target.value)
+                              setField("price_amount", e.target.value)
                             }
                             className={inputClass}
                           />
+                          <p className="mt-1 text-xs text-slate-500">
+                            Shown to students. Buy Now is currently demo
+                            enrollment only.
+                          </p>
                         </div>
                       ) : null}
                       <div className="mt-3 rounded-xl border border-slate-200 p-3">
@@ -560,6 +748,25 @@ export default function EditCoursePage() {
           </main>
         </div>
       </div>
+      {previewOpen && form ? (
+        <CoursePreviewModal
+          course={{
+            ...form,
+            price_cents: Math.round(Number(form.price_amount || 0) * 100),
+            learning_outcomes: parseLineList(form.learning_outcomes),
+            skills: parseLineList(form.skills),
+            requirements: parseLineList(form.requirements),
+            projects: parseLineList(form.projects),
+            learning_path: parseLineList(form.learning_path),
+            ai_features: parseLineList(form.ai_features),
+            included_features: parseLineList(form.included_features),
+            faqs: parseFaqList(form.faqs),
+          }}
+          modules={course?.modules || []}
+          instructor={user}
+          onClose={() => setPreviewOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
