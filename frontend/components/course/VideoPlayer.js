@@ -79,7 +79,12 @@ function loadYouTubeIframeAPI() {
   return youtubeApiPromise;
 }
 
-export default function VideoPlayer({ video }) {
+export default function VideoPlayer({
+  video,
+  showAI = true,
+  onPositionChange,
+  onComplete,
+}) {
   const [position, setPosition] = useState(
     video?.state?.last_position_seconds || 0,
   );
@@ -108,14 +113,16 @@ export default function VideoPlayer({ video }) {
 
   useEffect(() => {
     setChapters(initialChapters);
-  }, [video.id]);
+  }, [video.id, video?.analysis]);
 
   useEffect(() => {
     let active = true;
     fetchVideoState(video.id)
       .then((state) => {
         if (!active) return;
-        setPosition(state.last_position_seconds || 0);
+        const savedPosition = state.last_position_seconds || 0;
+        setPosition(savedPosition);
+        onPositionChange?.(savedPosition);
         if (state.duration_seconds) setDuration(state.duration_seconds);
       })
       .catch(() => {});
@@ -154,6 +161,7 @@ export default function VideoPlayer({ video }) {
                   event.target.getDuration?.() || duration || 0,
                 );
                 setPosition(p);
+                onPositionChange?.(p);
                 setDuration(d);
                 if (p - lastSavedRef.current >= 10) {
                   lastSavedRef.current = p;
@@ -177,7 +185,9 @@ export default function VideoPlayer({ video }) {
                   watched_seconds: d,
                   duration_seconds: d,
                   is_completed: true,
-                }).catch(() => {});
+                })
+                  .then(() => onComplete?.(video.id))
+                  .catch(() => {});
               }
             },
             onError: (event) => {
@@ -221,6 +231,7 @@ export default function VideoPlayer({ video }) {
     const current = Math.floor(event.currentTarget.currentTime || 0);
     const total = Math.floor(event.currentTarget.duration || duration || 0);
     setPosition(current);
+    onPositionChange?.(current);
     setDuration(total);
     if (current - lastSavedRef.current >= 10) {
       lastSavedRef.current = current;
@@ -245,11 +256,13 @@ export default function VideoPlayer({ video }) {
     if (youtubeId && playerRef.current?.seekTo) {
       playerRef.current.seekTo(target, true);
       setPosition(Math.floor(target));
+      onPositionChange?.(Math.floor(target));
       return;
     }
     if (htmlVideoRef.current) {
       htmlVideoRef.current.currentTime = target;
       setPosition(Math.floor(target));
+      onPositionChange?.(Math.floor(target));
     }
   }
 
@@ -316,7 +329,9 @@ export default function VideoPlayer({ video }) {
                   watched_seconds: Math.floor(duration),
                   duration_seconds: Math.floor(duration),
                   is_completed: true,
-                }).catch(() => {})
+                })
+                  .then(() => onComplete?.(video.id))
+                  .catch(() => {})
               }
             />
           ) : (
@@ -377,47 +392,49 @@ export default function VideoPlayer({ video }) {
         </Card>
       ) : null}
 
-      <Card className="p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-blue-600" />
-            <h3 className="font-semibold">AI while you watch</h3>
+      {showAI ? (
+        <Card className="p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-blue-600" />
+              <h3 className="font-semibold">AI while you watch</h3>
+            </div>
+            <span className="text-xs text-slate-500">
+              {position}s{duration ? ` / ${duration}s` : ""}
+            </span>
           </div>
-          <span className="text-xs text-slate-500">
-            {position}s{duration ? ` / ${duration}s` : ""}
-          </span>
-        </div>
-        <p className="mt-1 text-sm text-slate-500">
-          Ask about the current section. LearnMate sends the video context and
-          playback timestamp to the real AI Tutor.
-        </p>
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-          <input
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && ask()}
-            className="input-ui flex-1"
-            placeholder="What did the teacher explain here?"
-          />
-          <button
-            onClick={ask}
-            disabled={busy || !question.trim()}
-            className="btn-primary shrink-0"
-          >
-            {busy ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}{" "}
-            Ask AI
-          </button>
-        </div>
-        {answer && (
-          <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-700 whitespace-pre-wrap">
-            {answer}
+          <p className="mt-1 text-sm text-slate-500">
+            Ask about the current section. LearnMate sends the video context and
+            playback timestamp to the real AI Tutor.
+          </p>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <input
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && ask()}
+              className="input-ui flex-1"
+              placeholder="What did the teacher explain here?"
+            />
+            <button
+              onClick={ask}
+              disabled={busy || !question.trim()}
+              className="btn-primary shrink-0"
+            >
+              {busy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}{" "}
+              Ask AI
+            </button>
           </div>
-        )}
-      </Card>
+          {answer && (
+            <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-700 whitespace-pre-wrap">
+              {answer}
+            </div>
+          )}
+        </Card>
+      ) : null}
     </div>
   );
 }
