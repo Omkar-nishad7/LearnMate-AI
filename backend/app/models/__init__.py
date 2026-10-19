@@ -1,4 +1,5 @@
 from app.models.user import User, UserProfile, RefreshToken, UserRole, UserStatus
+from app.models.course_resource import CourseResource
 from app.models.course import (
     Course, CourseModule, CourseLesson, Enrollment,
     CourseStatus, EnrollmentStatus,
@@ -23,7 +24,7 @@ from app.models.teacher_youtube_channel import TeacherYouTubeChannel
 
 __all__ = [
     "User", "UserProfile", "RefreshToken", "UserRole", "UserStatus",
-    "Course", "CourseModule", "CourseLesson", "Enrollment",
+    "Course", "CourseModule", "CourseLesson", "Enrollment", "CourseResource",
     "CourseStatus", "EnrollmentStatus",
     "Video", "VideoAnalysis", "VideoSource", "ProcessingStatus",
     "Note", "NoteVersion",

@@ -528,9 +528,12 @@ export default function EditCoursePage() {
                               Modules, lessons and resources
                             </p>
                             <p className="mt-1 text-xs leading-5 text-slate-500">
-                              Open the course workspace to manage the existing
-                              lesson structure. This keeps course content
-                              separate from basic metadata edits.
+                              Create and reorder modules, add or edit lessons,
+                              upload or import lesson videos, and attach
+                              downloadable PDFs, documents, notes, worksheets,
+                              or images to the whole course or a specific
+                              lesson. Course materials become available to
+                              enrolled students.
                             </p>
                           </div>
                         </div>
@@ -539,7 +542,7 @@ export default function EditCoursePage() {
                           className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-50"
                         >
                           <Layers3 className="h-4 w-4" />
-                          Manage Content
+                          Manage Modules, Lessons & Resources
                         </Link>
                       </div>
                     </section>

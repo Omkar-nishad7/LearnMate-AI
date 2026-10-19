@@ -39,6 +39,10 @@ import {
   fetchMyEnrollments,
 } from "@/services/courses";
 import { fetchCourseAssignments } from "@/services/assignments";
+import {
+  fetchCourseResources,
+  resolveCourseResourceUrl,
+} from "@/services/courseResources";
 import { fetchTeacherProfile } from "@/services/teachers";
 import { fetchMyUser } from "@/services/users";
 import {
@@ -157,6 +161,25 @@ function CourseLearningRoom({
   const [noteSaving, setNoteSaving] = useState(false);
   const [generatedQuiz, setGeneratedQuiz] = useState(null);
   const [roomError, setRoomError] = useState("");
+  const [courseResources, setCourseResources] = useState([]);
+  const [resourcesError, setResourcesError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchCourseResources(course.id)
+      .then((items) => {
+        if (!cancelled) setCourseResources(Array.isArray(items) ? items : []);
+      })
+      .catch((err) => {
+        if (!cancelled)
+          setResourcesError(
+            errorMessage(err, "Course resources could not be loaded."),
+          );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [course.id]);
 
   useEffect(() => {
     setVideoItems(videos || []);
@@ -1017,9 +1040,79 @@ function CourseLearningRoom({
                                 Lesson resources
                               </h3>
                               <p className="mt-2 text-sm text-slate-600">
-                                Use the transcript and lesson notes to reinforce
-                                the concepts covered in this video.
+                                Download materials your teacher has attached to
+                                this course or lesson, or use the transcript and
+                                your own notes for revision.
                               </p>
+                              {resourcesError ? (
+                                <p
+                                  role="alert"
+                                  className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800"
+                                >
+                                  {resourcesError}
+                                </p>
+                              ) : null}
+                              <div className="mt-4 space-y-2">
+                                {courseResources
+                                  .filter(
+                                    (resource) =>
+                                      resource.lesson_id == null ||
+                                      Number(resource.lesson_id) ===
+                                        Number(selectedLesson?.id),
+                                  )
+                                  .map((resource) => (
+                                    <div
+                                      key={resource.id}
+                                      className="flex flex-wrap items-start gap-3 rounded-xl border border-slate-200 p-3"
+                                    >
+                                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-600">
+                                        <FileText className="h-5 w-5" />
+                                      </span>
+                                      <div className="min-w-0 flex-1">
+                                        <p className="font-semibold text-slate-800">
+                                          {resource.title}
+                                        </p>
+                                        <p className="mt-1 text-xs text-slate-500">
+                                          {resource.original_name}
+                                          {resource.lesson_id == null
+                                            ? " · Course material"
+                                            : " · Lesson material"}
+                                          {resource.size_bytes
+                                            ? ` · ${(resource.size_bytes / 1024 / 1024).toFixed(resource.size_bytes >= 1048576 ? 1 : 2)} MB`
+                                            : ""}
+                                        </p>
+                                        {resource.description ? (
+                                          <p className="mt-1 text-sm text-slate-600">
+                                            {resource.description}
+                                          </p>
+                                        ) : null}
+                                      </div>
+                                      <a
+                                        href={resolveCourseResourceUrl(
+                                          resource.download_url,
+                                        )}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="btn-secondary inline-flex shrink-0 items-center"
+                                      >
+                                        <Download className="mr-2 h-4 w-4" />
+                                        Download
+                                      </a>
+                                    </div>
+                                  ))}
+                              </div>
+                              {!resourcesError &&
+                              courseResources.filter(
+                                (resource) =>
+                                  resource.lesson_id == null ||
+                                  Number(resource.lesson_id) ===
+                                    Number(selectedLesson?.id),
+                              ).length === 0 ? (
+                                <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
+                                  Your instructor hasn’t added resources for
+                                  this lesson yet.
+                                </p>
+                              ) : null}
                               <div className="mt-4 flex flex-wrap gap-2">
                                 <button
                                   type="button"
@@ -1033,7 +1126,7 @@ function CourseLearningRoom({
                                   type="button"
                                   onClick={makeNotes}
                                   disabled={
-                                    notesBusy || !activeVideo.transcript
+                                    notesBusy || !activeVideo?.transcript
                                   }
                                   className="btn-secondary disabled:opacity-50"
                                 >
@@ -1044,13 +1137,15 @@ function CourseLearningRoom({
                                   )}
                                   Generate notes
                                 </button>
-                                <Link
-                                  href={`/student/videos/${activeVideo.id}`}
-                                  className="btn-secondary"
-                                >
-                                  More lesson tools{" "}
-                                  <ArrowRight className="ml-2 h-4 w-4" />
-                                </Link>
+                                {activeVideo?.id ? (
+                                  <Link
+                                    href={`/student/videos/${activeVideo.id}`}
+                                    className="btn-secondary"
+                                  >
+                                    More lesson tools{" "}
+                                    <ArrowRight className="ml-2 h-4 w-4" />
+                                  </Link>
+                                ) : null}
                               </div>
                             </>
                           ) : null}
@@ -1141,6 +1236,85 @@ function CourseLearningRoom({
                           ) : null}
                         </div>
                       </div>
+                    ) : null}
+                    {!activeVideo ? (
+                      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-5 w-5 text-blue-600" />
+                          <h3 className="font-bold text-slate-900">
+                            Course resources
+                          </h3>
+                        </div>
+                        <p className="mt-2 text-sm text-slate-600">
+                          Download documents and study material your instructor
+                          attached to this course or selected lesson.
+                        </p>
+                        {resourcesError ? (
+                          <p
+                            role="alert"
+                            className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800"
+                          >
+                            {resourcesError}
+                          </p>
+                        ) : null}
+                        <div className="mt-4 space-y-2">
+                          {courseResources
+                            .filter(
+                              (resource) =>
+                                resource.lesson_id == null ||
+                                Number(resource.lesson_id) ===
+                                  Number(selectedLesson?.id),
+                            )
+                            .map((resource) => (
+                              <div
+                                key={resource.id}
+                                className="flex flex-wrap items-start gap-3 rounded-xl border border-slate-200 p-3"
+                              >
+                                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-600">
+                                  <FileText className="h-5 w-5" />
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-semibold text-slate-800">
+                                    {resource.title}
+                                  </p>
+                                  <p className="mt-1 text-xs text-slate-500">
+                                    {resource.original_name}
+                                    {resource.lesson_id == null
+                                      ? " · Course material"
+                                      : " · Lesson material"}
+                                  </p>
+                                  {resource.description ? (
+                                    <p className="mt-1 text-sm text-slate-600">
+                                      {resource.description}
+                                    </p>
+                                  ) : null}
+                                </div>
+                                <a
+                                  href={resolveCourseResourceUrl(
+                                    resource.download_url,
+                                  )}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="btn-secondary inline-flex shrink-0 items-center"
+                                >
+                                  <Download className="mr-2 h-4 w-4" />
+                                  Download
+                                </a>
+                              </div>
+                            ))}
+                        </div>
+                        {!resourcesError &&
+                        courseResources.filter(
+                          (resource) =>
+                            resource.lesson_id == null ||
+                            Number(resource.lesson_id) ===
+                              Number(selectedLesson?.id),
+                        ).length === 0 ? (
+                          <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
+                            No course resources have been added yet.
+                          </p>
+                        ) : null}
+                      </section>
                     ) : null}
                   </div>
 

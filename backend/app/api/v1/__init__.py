@@ -20,6 +20,7 @@ from app.api.v1 import (
     youtube_channels,
     teachers,
     admin,
+    course_resources,
 )
 from app.api.v1.courses import (
     router as courses_router,
@@ -50,5 +51,6 @@ api_router.include_router(search.router)
 api_router.include_router(youtube_channels.router)
 api_router.include_router(teachers.router)
 api_router.include_router(admin.router)
+api_router.include_router(course_resources.router)
 
 __all__ = ["api_router"]

@@ -38,3 +38,7 @@ export async function getAIUsage(feature = "tutor") {
   });
   return data;
 }
+export async function generateTeacherAssignment(payload) {
+  const { data } = await api.post(apiPaths.teacherAI.assignment, payload);
+  return data;
+}

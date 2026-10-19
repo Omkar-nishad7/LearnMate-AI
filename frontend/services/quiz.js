@@ -38,3 +38,13 @@ export async function fetchLatestQuizAttempt(quizId) {
 export async function deleteStudentQuiz(quizId) {
   await api.delete(apiPaths.quizzes.detail(quizId));
 }
+
+export async function fetchTeacherQuizById(id) {
+  const { data } = await api.get(`${apiPaths.quizzes.detail(id)}/author`);
+  return data;
+}
+
+export async function publishTeacherQuiz(id) {
+  const { data } = await api.post(`${apiPaths.quizzes.detail(id)}/publish`);
+  return data;
+}

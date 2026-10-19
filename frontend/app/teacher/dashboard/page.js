@@ -13,7 +13,6 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock3,
-  FilePlus2,
   GraduationCap,
   Plus,
   RefreshCw,
@@ -309,7 +308,7 @@ export default function TeacherDashboardPage() {
                 />
               </section>
 
-              <section className="grid items-start gap-5 xl:grid-cols-[1.35fr_0.95fr_0.78fr]">
+              <section className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.95fr)_minmax(260px,0.82fr)]">
                 <Card className="min-w-0 overflow-hidden border-slate-200/80">
                   <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
                     <div>
@@ -509,28 +508,28 @@ export default function TeacherDashboardPage() {
                         href="/teacher/courses/new"
                         icon={Plus}
                         title="Create Course"
-                        description="Build a learning path"
+                        description="Set up course details and pricing"
                         tone="violet"
                       />
                       <QuickAction
-                        href="/teacher/assignments/new"
-                        icon={FilePlus2}
-                        title="Add Assignment"
-                        description="Give students practice"
+                        href="/teacher/courses"
+                        icon={BookOpen}
+                        title="Manage Courses & Lessons"
+                        description="Build modules, videos, and resources"
                         tone="blue"
                       />
                       <QuickAction
                         href="/teacher/videos"
                         icon={Upload}
-                        title="Upload Resources"
-                        description="Manage videos and lessons"
+                        title="Open Content Studio"
+                        description="Create notes, quizzes, and flashcards"
                         tone="green"
                       />
                       <QuickAction
                         href="/teacher/assignments/new"
                         icon={ClipboardList}
-                        title="Create Quiz / Assignment"
-                        description="Create assessable work"
+                        title="Create Assignment"
+                        description="Prepare student practice work"
                         tone="orange"
                       />
                     </div>

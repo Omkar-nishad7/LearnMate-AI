@@ -270,6 +270,10 @@ export const apiPaths = {
     myEnrollments: "/student/enrollments",
     enroll: (id) => `/student/courses/${id}/enroll`,
   },
+  teacherAI: {
+    assignment: "/teacher/ai/assignment",
+    courseOutline: "/teacher/ai/course-outline",
+  },
   ai: {
     tutor: "/ai/tutor",
     tutorConversations: "/ai/tutor/conversations",
@@ -278,6 +282,13 @@ export const apiPaths = {
     generateNotes: "/ai/generate-notes",
     generateQuiz: "/ai/generate-quiz",
     usage: "/ai/usage",
+  },
+  courseResources: {
+    teacherList: "/course-resources/teacher",
+    teacherCourse: (courseId) => `/course-resources/teacher/courses/${courseId}`,
+    createTeacherCourse: (courseId) => `/course-resources/teacher/courses/${courseId}`,
+    removeTeacherCourse: (courseId, resourceId) => `/course-resources/teacher/courses/${courseId}/${resourceId}`,
+    course: (courseId) => `/course-resources/courses/${courseId}`,
   },
   notes: {
     list: "/notes",

@@ -60,6 +60,27 @@ export default function NewAssignmentPage() {
   });
 
   useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem(
+        "learnmate:generated-assignment",
+      );
+      if (raw) {
+        const draft = JSON.parse(raw);
+        setForm((current) => ({
+          ...current,
+          course_id: draft.course_id
+            ? String(draft.course_id)
+            : current.course_id,
+          title: draft.title || current.title,
+          description: draft.description || current.description,
+          instructions: draft.instructions || current.instructions,
+          max_score: Number(draft.max_score || current.max_score),
+        }));
+        window.sessionStorage.removeItem("learnmate:generated-assignment");
+      }
+    } catch (_) {
+      window.sessionStorage.removeItem("learnmate:generated-assignment");
+    }
     Promise.all([fetchTeacherAllCourses(), fetchMyUser()])
       .then(([c, u]) => {
         setCourses(c.items || []);
