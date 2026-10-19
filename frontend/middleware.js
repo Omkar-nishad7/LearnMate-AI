@@ -6,7 +6,14 @@ export function middleware(request) {
   const isProtectedPage = pathname.startsWith("/student") || pathname.startsWith("/teacher") || pathname.startsWith("/admin");
 
   if (isProtectedPage && !token) {
-    return NextResponse.redirect(new URL("/auth/login", request.url));
+    const loginUrl = new URL("/auth/login", request.url);
+    // Preserve the exact protected URL so shared course links can resume
+    // after login or registration instead of sending visitors to a dashboard.
+    loginUrl.searchParams.set(
+      "next",
+      `${pathname}${request.nextUrl.search || ""}`,
+    );
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();

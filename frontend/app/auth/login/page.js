@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Mail, Lock, BookOpen } from "lucide-react";
 import { toast } from "sonner";
@@ -14,10 +14,37 @@ function dashboardForRole(role) {
   return "/student/dashboard";
 }
 
+function safeReturnPath(value) {
+  if (
+    typeof value !== "string" ||
+    !value.startsWith("/") ||
+    value.startsWith("//")
+  )
+    return "";
+  if (value.startsWith("/auth/login") || value.startsWith("/auth/register"))
+    return "";
+  return value;
+}
+
+function destinationAfterLogin(role, returnPath) {
+  const normalized = String(role || "").toUpperCase();
+  // Shared course destinations are student routes; do not redirect a teacher
+  // or admin account into a student page that they cannot use.
+  if (normalized === "STUDENT" && returnPath.startsWith("/student/"))
+    return returnPath;
+  return dashboardForRole(normalized);
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [form, setForm] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
+  const [returnTo, setReturnTo] = useState("");
+
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("next");
+    setReturnTo(safeReturnPath(requested));
+  }, []);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -26,7 +53,12 @@ export default function LoginPage() {
     try {
       const result = await loginUser(form);
       toast.success("Login successful");
-      router.replace(dashboardForRole(result?.user?.role));
+      const requested = safeReturnPath(
+        new URLSearchParams(window.location.search).get("next"),
+      );
+      router.replace(
+        destinationAfterLogin(result?.user?.role, requested || returnTo),
+      );
     } catch (error) {
       toast.error(
         error?.message || "Login failed. Please check your email and password.",
@@ -137,7 +169,11 @@ export default function LoginPage() {
               <p className="mt-6 text-sm text-slate-600">
                 Don’t have an account?{" "}
                 <Link
-                  href="/auth/register"
+                  href={
+                    returnTo
+                      ? `/auth/register?next=${encodeURIComponent(returnTo)}`
+                      : "/auth/register"
+                  }
                   className="font-medium text-blue-600 hover:text-blue-700"
                 >
                   Register

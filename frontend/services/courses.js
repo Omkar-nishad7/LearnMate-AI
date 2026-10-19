@@ -119,8 +119,23 @@ export async function deleteLesson(lessonId) {
 }
 
 export async function fetchMyEnrollments() {
-  const { data } = await api.get(apiPaths.courses.myEnrollments);
-  return data || [];
+  // The API paginates enrollment rows. Collect all pages so the student
+  // catalog does not silently omit courses beyond the first 20 results.
+  const pageSize = 100;
+  const items = [];
+  let page = 1;
+
+  while (page <= 1000) {
+    const { data } = await api.get(apiPaths.courses.myEnrollments, {
+      params: { page, page_size: pageSize },
+    });
+    const currentPage = Array.isArray(data) ? data : [];
+    items.push(...currentPage);
+    if (currentPage.length < pageSize) break;
+    page += 1;
+  }
+
+  return items;
 }
 
 export async function enrollCourse(courseId) {

@@ -12,6 +12,7 @@ import {
   Clock3,
   UserRound,
   Layers3,
+  Share2,
 } from "lucide-react";
 import Sidebar from "@/components/layout/Sidebar";
 import Navbar from "@/components/layout/Navbar";
@@ -27,6 +28,7 @@ import {
 import { fetchCourseAssignments } from "@/services/assignments";
 import { fetchTeacherProfile } from "@/services/teachers";
 import { fetchMyUser } from "@/services/users";
+import { toast } from "sonner";
 
 function errorMessage(error, fallback) {
   const detail = error?.data?.detail;
@@ -162,6 +164,35 @@ export default function StudentCourseDetailPage() {
     }
   }
 
+  async function shareCourse() {
+    if (!course?.id || typeof window === "undefined") return;
+    const url = `${window.location.origin}/student/courses/${encodeURIComponent(course.id)}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: course.title || "LearnMate AI course",
+          text: "Explore this course on LearnMate AI",
+          url,
+        });
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        toast.success("Course link copied. Share it with anyone.");
+      } else {
+        window.prompt("Copy this course link and share it:", url);
+      }
+    } catch (shareError) {
+      if (shareError?.name === "AbortError") return;
+      try {
+        await navigator.clipboard.writeText(url);
+        toast.success("Course link copied. Share it with anyone.");
+      } catch {
+        toast.error(
+          "Could not share the link on this device. Copy the URL from your address bar.",
+        );
+      }
+    }
+  }
+
   async function unenroll() {
     if (!id || unenrolling || enrolling) return;
     const confirmed = window.confirm(
@@ -244,9 +275,18 @@ export default function StudentCourseDetailPage() {
                             {String(course.language || "en").toUpperCase()}
                           </span>
                         </div>
-                        <h1 className="mt-4 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
-                          {course.title}
-                        </h1>
+                        <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
+                          <h1 className="min-w-0 flex-1 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+                            {course.title}
+                          </h1>
+                          <button
+                            type="button"
+                            onClick={shareCourse}
+                            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                          >
+                            <Share2 className="h-4 w-4" /> Share
+                          </button>
+                        </div>
                         <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-base">
                           {course.short_description ||
                             course.description ||

@@ -1,11 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Mail, Lock, User, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { registerUser } from "@/services/auth";
+
+function safeReturnPath(value) {
+  if (
+    typeof value !== "string" ||
+    !value.startsWith("/") ||
+    value.startsWith("//")
+  )
+    return "";
+  if (value.startsWith("/auth/login") || value.startsWith("/auth/register"))
+    return "";
+  return value;
+}
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -16,6 +28,12 @@ export default function RegisterPage() {
     role: "STUDENT",
   });
   const [loading, setLoading] = useState(false);
+  const [returnTo, setReturnTo] = useState("");
+
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("next");
+    setReturnTo(safeReturnPath(requested));
+  }, []);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -24,11 +42,21 @@ export default function RegisterPage() {
     try {
       const result = await registerUser(form);
       const role = String(result?.user?.role || form.role).toUpperCase();
+      const requested = safeReturnPath(
+        new URLSearchParams(window.location.search).get("next"),
+      );
       const dashboard =
-        role === "TEACHER" ? "/teacher/dashboard" : "/student/dashboard";
+        role === "TEACHER"
+          ? "/teacher/dashboard"
+          : role === "STUDENT" &&
+              (requested || returnTo).startsWith("/student/")
+            ? requested || returnTo
+            : "/student/dashboard";
 
       toast.success(
-        "Account created successfully. Redirecting to your dashboard.",
+        dashboard.startsWith("/student/courses/")
+          ? "Account created. Opening the shared course…"
+          : "Account created successfully. Redirecting to your dashboard.",
       );
       router.replace(dashboard);
       router.refresh();
@@ -164,7 +192,11 @@ export default function RegisterPage() {
               <p className="mt-6 text-sm text-slate-600">
                 Already have an account?{" "}
                 <Link
-                  href="/auth/login"
+                  href={
+                    returnTo
+                      ? `/auth/login?next=${encodeURIComponent(returnTo)}`
+                      : "/auth/login"
+                  }
                   className="font-medium text-blue-600 hover:text-blue-700"
                 >
                   Login
